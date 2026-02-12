@@ -1,6 +1,6 @@
 {
   "name": "@lownoise-studio/rendershield",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Boring bot-aware prerendering: real HTML for bots, SPA for humans.",
   "type": "module",
   "license": "MIT",
