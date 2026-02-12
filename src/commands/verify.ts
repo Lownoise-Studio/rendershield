@@ -32,7 +32,8 @@ async function findFirstIndexHtml(outDirAbs: string): Promise<string | null> {
       }
 
       if (entry.isFile() && entry.name.toLowerCase() === "index.html") {
-        // Ignore index.html at root; prefer a route page like blog/slug/index.html
+        // Ignore index.html at the output root; prefer a routed page like
+        // <section>/<slug>/index.html (or deeper).
         const rel = path.relative(outDirAbs, full);
         const parts = rel.split(path.sep).filter(Boolean);
         if (parts.length >= 2) return full;
@@ -45,7 +46,7 @@ async function findFirstIndexHtml(outDirAbs: string): Promise<string | null> {
 
 function indexHtmlPathToRoute(outDirAbs: string, indexPathAbs: string): string {
   const rel = path.relative(outDirAbs, indexPathAbs);
-  // rel: blog/hello-world/index.html
+  // rel: <section>/<slug>/index.html
   const noFile = rel.replace(/index\.html$/i, "");
   const normalized = noFile.split(path.sep).join("/").replace(/\/+$/, "");
   return "/" + normalized.replace(/^\/+/, "");
