@@ -1,0 +1,55 @@
+{
+    "version": 1,
+    "site": {
+      "canonicalBase": "https://example.com",
+      "siteName": "Example Site",
+      "defaultOgImage": "https://example.com/og/default.jpg",
+      "authorName": "Your Name"
+    },
+    "content": {
+      "markdown": {
+        "baseDir": "content",
+        "collections": [
+          {
+            "name": "blog",
+            "pattern": "blog/**/*.md",
+            "routeBase": "/blog",
+            "schemaType": "Article"
+          }
+        ]
+      }
+    },
+    "output": {
+      "outDir": "dist-prerender",
+      "prettyHtml": true
+    },
+    "sitemap": {
+      "enabled": true,
+      "path": "/sitemap.xml"
+    },
+    "robots": {
+      "enabled": true,
+      "path": "/robots.txt"
+    },
+    "worker": {
+      "enabled": true,
+      "lovableOrigin": "https://YOUR_SITE.lovable.app",
+      "rewriteRouteBases": ["/blog/"],
+      "botUserAgentPatterns": [
+        "googlebot",
+        "bingbot",
+        "gptbot",
+        "claudebot",
+        "perplexitybot",
+        "twitterbot",
+        "facebookexternalhit",
+        "linkedinbot",
+        "slackbot",
+        "discordbot",
+        "whatsapp",
+        "telegram"
+      ],
+      "debugHeaders": true
+    }
+  }
+  
