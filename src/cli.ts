@@ -14,7 +14,7 @@ Usage:
 
 Notes:
   - Config file: rendershield.config.json
-  - Content: content/blog/*.md (frontmatter required)
+  - Content: content/<collection>/**/*.md (frontmatter required)
   - Output: dist-prerender/
 `);
 }
