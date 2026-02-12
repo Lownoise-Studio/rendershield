@@ -3,7 +3,7 @@
 RenderShield ensures crawlers receive complete, static HTML instead of an empty
 JavaScript shell — without changing how humans experience your app.
 
-It prerenders content ahead of time and routes crawler requests to that output
+It prerenders content ahead of time and can route crawler requests to that output
 at the edge, while normal users continue to receive the SPA.
 
 No frameworks required.  
