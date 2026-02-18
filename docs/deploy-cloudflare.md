@@ -37,6 +37,12 @@ At a high level:
 - Known crawlers are routed to prerendered HTML files
 - All other traffic passes through to your SPA unchanged
 
+Every response from the Worker includes an **x-rendershield** header so routing is observable:
+
+- **pass-through** — request was not rewritten (human or path not in rewrite bases)
+- **bot-hit** — bot request was rewritten and prerendered HTML was served
+- **bot-fallback** — bot request was rewritten but the origin returned non-200; Worker fell back to the SPA
+
 If prerendered output is missing or incomplete, RenderShield fails the build.
 
 ---
@@ -104,7 +110,7 @@ The Worker must be able to fetch prerendered files.
 
 You need a static origin that serves paths like:
 
-- /content/example/index.html
+- /blog/example/index.html (or your configured route base)
 - /sitemap.xml
 - /robots.txt
 
@@ -132,36 +138,56 @@ Submit the sitemap URL in Google Search Console.
 
 ## Verification
 
-RenderShield includes a verify command to guide testing.
+### Production verification (recommended)
 
-### Worker execution test
+After deploying the Worker and hosting prerendered output, run:
 
-Run:
+```bash
+rendershield verify --prod https://yourdomain.com
+```
 
-curl -I -H "User-Agent: GPTBot" https://yourdomain.com/content/example
+This command:
 
-If debug headers are enabled, you should see headers similar to:
+- Fetches the URL as Googlebot
+- Asserts the response has **x-rendershield: bot-hit** (proving the Worker served prerendered HTML)
+- Validates metadata, JSON-LD, and article content
+- Exits with code 1 if the header is missing, is `bot-fallback`, or the contract fails
+
+If it passes, crawlers are receiving the prerendered HTML.
+
+### Manual checks (optional)
+
+Check the response header:
+
+```bash
+curl -I -H "User-Agent: Googlebot" https://yourdomain.com/blog/example
+```
+
+You should see **x-rendershield: bot-hit**. If debug headers are enabled in config, you may also see:
 
 - X-Bot-Detected: true
 - X-Prerender: true
-- X-Final-Path: /content/example/index.html
+- X-Final-Path: /blog/example/index.html
 
-If these headers are missing:
+If **x-rendershield** is missing or **bot-fallback**:
+
 - The Worker route may not be attached
 - The Cloudflare proxy may be disabled
-- DNS may still point to a different origin
+- The prerendered origin may be returning non-200 for that path
 
----
-
-## Content comparison
+### Content comparison
 
 Human request (SPA response):
 
-curl -s https://yourdomain.com/content/example | grep -i "<title>"
+```bash
+curl -s https://yourdomain.com/blog/example | grep -i "<title>"
+```
 
 Crawler request (prerendered HTML):
 
-curl -s -H "User-Agent: Googlebot" https://yourdomain.com/content/example | grep -i "<title>"
+```bash
+curl -s -H "User-Agent: Googlebot" https://yourdomain.com/blog/example | grep -i "<title>"
+```
 
 The crawler response should contain the prerendered, route-specific title.
 

@@ -1,144 +1,154 @@
 # RenderShield
 
-RenderShield ensures crawlers receive complete, static HTML instead of an empty
-JavaScript shell — without changing how humans experience your app.
+RenderShield produces complete, static HTML for crawlers — and can prove
+that bots receive it in production.
 
-It prerenders content ahead of time and can route crawler requests to that output
-at the edge, while normal users continue to receive the SPA.
+It prerenders structured content ahead of time and optionally routes crawler
+requests to that output at the edge, while normal users continue to receive
+your SPA.
 
-No frameworks required.  
-No vendor lock-in.  
+No frameworks required.
+No browser rendering.
 No guessing what bots see.
 
-If a page builds, the HTML is complete. If it isn’t, the build fails.
+If a page builds, the HTML contract is satisfied.
+If verify --prod passes, crawlers are actually receiving it.
 
 ---
 
 ## What problem this solves
 
-Many modern apps technically work but are invisible to:
+Modern SPAs often render content only after JavaScript executes.
 
-- search engines
-- social preview scrapers
-- AI crawlers
+Search engines, social scrapers, and AI crawlers may:
 
-The content exists only after JavaScript executes.
-Crawlers do not wait.
+- see an empty shell
+- see partial metadata
+- receive inconsistent output
 
-RenderShield fixes this by generating static, bot-readable HTML and refusing
-to ship incomplete output.
+RenderShield enforces two guarantees:
+
+- **Build-time contract** — Generated HTML must contain required metadata and content.
+- **Production routing proof** — Bots must receive prerendered HTML (verified via header).
 
 ---
 
 ## What RenderShield does
 
-- Converts structured content into full static HTML pages
+- Converts structured content (Markdown) into full static HTML pages
 - Injects:
-  - title
+  - `<title>`
   - meta description
   - canonical link
   - Open Graph tags
   - Twitter tags
-  - JSON-LD (Article)
+  - JSON-LD (Article, BlogPosting, WebPage)
 - Generates:
   - index.html per route
   - sitemap.xml
   - robots.txt
   - optional Cloudflare Worker
-- Validates output
-  - missing title, metadata, or content causes the build to fail
-
-If it builds, crawlers will see real content.
+- Validates output:
+  - missing title, metadata, or article body causes the build to fail
+- Verifies production behavior:
+  - `verify --prod` asserts `x-rendershield: bot-hit`
+  - fails if the Worker is missing or falling back
 
 ---
 
 ## What it does not do
 
-- It does not run your application
-- It does not execute JavaScript for bots
+- It does not execute your application
+- It does not render JavaScript for bots
 - It does not guess content
-- It does not promise rankings, traffic, or citations
+- It does not guarantee rankings or traffic
 - It does not replace your SPA
 
 It guarantees one thing only:
-that crawlers receive complete HTML.
+that bot-facing HTML meets a defined contract —
+and (optionally) that production routing serves it.
 
 ---
 
 ## Quickstart
 
-1) Install dependencies
+**Install dependencies**
 
-Run:
-
+```bash
 npm install
+```
 
-2) Initialize RenderShield
+**Initialize**
 
-Run:
+```bash
+rendershield init
+```
 
-npm run build
+**Add content**
 
-This creates:
-- rendershield.config.json
-- sample content
-- a prerender output directory
+```
+content/blog/
+```
 
-3) Add content
+**Build**
 
-Place structured content under:
+```bash
+rendershield build
+```
 
-content/
+**Output**
 
-4) Build prerendered output
-
-Run:
-
-node dist/cli.js build
-
-Output is written to:
-
+```
 dist-prerender/
+```
 
-5) Verify output
+**Local verify**
 
-Run:
+```bash
+rendershield verify
+```
 
-node dist/cli.js verify
+**Production verify (after deploying Worker)**
 
-This prints curl commands you can use to confirm crawler behavior.
+```bash
+rendershield verify --prod https://your-domain.com
+```
 
-**Production check:** After deploying the Worker, run:
+This command:
 
-`rendershield verify --prod https://your-domain.com`
-
-This fetches the URL as a bot and asserts the response has `x-rendershield: bot-hit` (proving the Worker served prerendered HTML). If the header is missing or `bot-fallback`, the command fails.
+- Fetches as Googlebot
+- Requires `x-rendershield: bot-hit`
+- Validates metadata + JSON-LD + article content
+- Exits with code 1 if anything fails
 
 ---
 
 ## Deployment
 
-RenderShield is designed to run behind Cloudflare.
+Designed for Cloudflare Workers.
 
-A Worker routes crawler requests to prerendered HTML while passing all other
-traffic through unchanged.
+The generated Worker:
 
-See:
-docs/deploy-cloudflare.md
+- Rewrites bot requests
+- Sets `x-rendershield` on all responses
+- Makes routing observable and testable
+
+See: [docs/deploy-cloudflare.md](docs/deploy-cloudflare.md)
 
 ---
 
 ## Philosophy
 
-RenderShield is intentionally boring.
+RenderShield is intentionally narrow.
 
-It does not attempt to outsmart crawlers or simulate browsers.
-It produces correct HTML and refuses to ship broken output.
+It does not attempt to simulate browsers.
+It does not promise SEO outcomes.
+It enforces a deterministic HTML contract and observable crawler routing.
 
-If crawlers cannot read it, the build fails.
+Boring on purpose.
 
 ---
 
 ## License
 
-MIT License
+MIT
