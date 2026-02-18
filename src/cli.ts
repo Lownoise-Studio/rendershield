@@ -10,7 +10,10 @@ RenderShield (v0) — boring bot-aware prerendering.
 Usage:
   rendershield init
   rendershield build
-  rendershield verify
+  rendershield verify [--prod <url>]
+
+  verify         Print curl commands for local/build output.
+  verify --prod  Fetch URL as bot and human; verify bot sees full HTML and contract fields.
 
 Notes:
   - Config file: rendershield.config.json
@@ -37,7 +40,10 @@ async function main() {
       return;
     }
     if (cmd === "verify") {
-      await cmdVerify();
+      const args = process.argv.slice(3);
+      const prodIdx = args.indexOf("--prod");
+      const prodUrl = prodIdx >= 0 && args[prodIdx + 1] ? args[prodIdx + 1].trim() : undefined;
+      await cmdVerify(undefined, prodUrl ? { prodUrl } : undefined);
       return;
     }
 

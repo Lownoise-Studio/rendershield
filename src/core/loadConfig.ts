@@ -29,6 +29,61 @@ function coerceBoolFlag(
   return { enabled: (v as any).enabled };
 }
 
+/**
+ * Worker config policy: strict mode.
+ * When worker.enabled is true, all of lovableOrigin, rewriteRouteBases, and
+ * botUserAgentPatterns are required and must be non-empty. No defaults are
+ * supplied — build fails with a crisp error.
+ * lovableOrigin: must be http: or https: only (no file:, javascript:, protocol-relative).
+ * botUserAgentPatterns: substring match only (not regex); empty strings rejected to avoid overmatching.
+ */
+function validateWorkerWhenEnabled(parsed: any): void {
+  if (!parsed.worker?.lovableOrigin || typeof parsed.worker.lovableOrigin !== "string") {
+    throw new Error(
+      `worker.lovableOrigin is required when worker.enabled is true. Example: "https://your-site.lovable.app"`
+    );
+  }
+  let url: URL;
+  try {
+    url = new URL(parsed.worker.lovableOrigin);
+  } catch {
+    throw new Error(
+      `worker.lovableOrigin must be a valid URL. Got: "${parsed.worker.lovableOrigin}"`
+    );
+  }
+  const scheme = url.protocol.toLowerCase();
+  if (scheme !== "http:" && scheme !== "https:") {
+    throw new Error(
+      `worker.lovableOrigin must use http or https. Got: "${url.protocol}"`
+    );
+  }
+  if (
+    !Array.isArray(parsed.worker?.rewriteRouteBases) ||
+    parsed.worker.rewriteRouteBases.length === 0
+  ) {
+    throw new Error(
+      `worker.rewriteRouteBases must be a non-empty array when worker.enabled is true. Example: ["/blog/"]`
+    );
+  }
+  if (
+    !Array.isArray(parsed.worker?.botUserAgentPatterns) ||
+    parsed.worker.botUserAgentPatterns.length === 0
+  ) {
+    throw new Error(
+      `worker.botUserAgentPatterns must be a non-empty array when worker.enabled is true. Example: ["googlebot", "bingbot"]`
+    );
+  }
+  // Substring match only; empty string would match every User-Agent
+  for (let i = 0; i < parsed.worker.botUserAgentPatterns.length; i++) {
+    const p = parsed.worker.botUserAgentPatterns[i];
+    if (typeof p !== "string" || p.trim() === "") {
+      throw new Error(
+        `worker.botUserAgentPatterns[${i}] must be a non-empty string (substring match). Empty or invalid entry would overmatch.`
+      );
+    }
+  }
+}
+
 export async function loadConfig(
   cwd = process.cwd()
 ): Promise<RenderShieldConfig> {
@@ -68,7 +123,20 @@ export async function loadConfig(
   // Validate + default these optional sections to prevent TypeErrors later
   parsed.sitemap = coerceBoolFlag(parsed, "sitemap", true);
   parsed.robots = coerceBoolFlag(parsed, "robots", true);
-  parsed.worker = coerceBoolFlag(parsed, "worker", true);
+  const workerFlag = coerceBoolFlag(parsed, "worker", true);
+  parsed.worker = workerFlag;
+
+  if (parsed.worker.enabled) {
+    validateWorkerWhenEnabled(parsed);
+  } else {
+    parsed.worker = {
+      enabled: false,
+      lovableOrigin: "",
+      rewriteRouteBases: [],
+      botUserAgentPatterns: [],
+      debugHeaders: false,
+    };
+  }
 
   return parsed as RenderShieldConfig;
 }

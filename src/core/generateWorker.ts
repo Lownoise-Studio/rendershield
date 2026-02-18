@@ -41,7 +41,12 @@ export default {
     const rewrite = bot && isGetLike && shouldRewrite(url.pathname);
 
     try {
-      if (!rewrite) return fetch(request);
+      if (!rewrite) {
+        const passResp = await fetch(request);
+        const out = new Response(passResp.body, passResp);
+        out.headers.set("x-rendershield", "pass-through");
+        return out;
+      }
 
       const origin = ${JSON.stringify(cfg.worker.lovableOrigin)};
       const finalPath = toIndexHtml(url.pathname);
@@ -57,6 +62,7 @@ export default {
         const fallbackUrl = origin + url.pathname + url.search;
         const fb = await fetch(fallbackUrl, { method: "GET", headers });
         const out = new Response(fb.body, fb);
+        out.headers.set("x-rendershield", "bot-fallback");
         ${cfg.worker.debugHeaders ? `out.headers.set("X-Bot-Detected", "true");
         out.headers.set("X-Prerender-Fallback", "true");
         out.headers.set("X-Requested-Path", url.pathname);` : ""}
@@ -64,6 +70,7 @@ export default {
       }
 
       const out = new Response(resp.body, resp);
+      out.headers.set("x-rendershield", "bot-hit");
       ${cfg.worker.debugHeaders ? `out.headers.set("X-Bot-Detected", "true");
       out.headers.set("X-Prerender", "true");
       out.headers.set("X-Final-Path", finalPath);` : ""}
