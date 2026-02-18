@@ -193,9 +193,12 @@ async function runVerifyProd(url: string): Promise<void> {
     );
   }
   if (!routingOk) {
+    const hint = xRenderShield == null
+      ? " If no Worker is deployed, use verify without --prod to check local/build output."
+      : "";
     throw new Error(
       `RenderShield verify --prod: expected x-rendershield: bot-hit (proving Worker routed bot to prerender). ` +
-        `Got: ${xRenderShield ?? "(missing)"}. Ensure the Worker is deployed and bound to this route.`
+        `Got: ${xRenderShield ?? "(missing)"}. Ensure the Worker is deployed and bound to this route.${hint}`
     );
   }
 

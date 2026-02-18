@@ -81,9 +81,12 @@ function normalizeJsonLdTypes(typeValue: unknown): string[] {
   return [];
 }
 
+/** Minimal shape for a JSON-LD node we validate (schema.org Article, BlogPosting, WebPage, etc.). */
+type JsonLdNode = Record<string, unknown>;
+
 /** Validate a single JSON-LD node (object). Returns true if it satisfies the contract. */
 function validateJsonLdNode(
-  node: any,
+  node: JsonLdNode,
   location: string,
   allowedTypes: string[]
 ): void {
@@ -98,7 +101,7 @@ function validateJsonLdNode(
   const hasAllowedType = types.some((t) => allowedSet.has(t));
   if (!hasAllowedType) {
     throw new Error(
-      `Invalid JSON-LD at ${location}: @type "${node["@type"]}" is not in allowed list [${allowedTypes.join(", ")}]. Add it to allowedJsonLdTypes if your page uses this type.`
+      `Invalid JSON-LD at ${location}: @type "${String(node["@type"])}" is not in allowed list [${allowedTypes.join(", ")}]. Add it to allowedJsonLdTypes if your page uses this type.`
     );
   }
 
@@ -141,17 +144,17 @@ function validateJsonLdSchema(
   const { routePath, sourcePath } = context;
   const location = sourcePath ? `route ${routePath} (source: ${sourcePath})` : `route ${routePath}`;
 
-  let parsed: any;
+  let parsed: unknown;
   try {
     parsed = JSON.parse(jsonLd);
-  } catch (err) {
+  } catch {
     const preview = jsonLd.length > 200 ? jsonLd.slice(0, 200) + "…" : jsonLd;
     throw new Error(
       `Invalid JSON-LD at ${location}: JSON parse error. Ensure the script tag contains valid JSON. Preview: ${preview}`
     );
   }
 
-  const items: any[] = Array.isArray(parsed) ? parsed : [parsed];
+  const items: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
   if (items.length === 0) {
     throw new Error(
       `Invalid JSON-LD at ${location}: empty array or missing object.`
@@ -163,7 +166,7 @@ function validateJsonLdSchema(
     const item = items[i];
     if (typeof item !== "object" || item === null || Array.isArray(item)) continue;
     try {
-      validateJsonLdNode(item, location, allowedTypes);
+      validateJsonLdNode(item as JsonLdNode, location, allowedTypes);
       return;
     } catch (e) {
       lastErr = e instanceof Error ? e : new Error(String(e));

@@ -1,11 +1,16 @@
 #!/usr/bin/env node
+import { createRequire } from "node:module";
 import { cmdInit } from "./commands/init.js";
 import { cmdBuild } from "./commands/build.js";
 import { cmdVerify } from "./commands/verify.js";
 
+const require = createRequire(import.meta.url);
+const pkg = require("../package.json") as { version?: string };
+const VERSION = pkg.version ?? "0.0.0";
+
 function printHelp() {
   console.log(`
-RenderShield (v0) — boring bot-aware prerendering.
+RenderShield v${VERSION} — boring bot-aware prerendering.
 
 Usage:
   rendershield init
@@ -14,6 +19,7 @@ Usage:
 
   verify         Print curl commands for local/build output.
   verify --prod  Fetch URL as bot and human; verify bot sees full HTML and contract fields.
+                 Requires x-rendershield: bot-hit from the Worker.
 
 Notes:
   - Config file: rendershield.config.json
@@ -23,10 +29,15 @@ Notes:
 }
 
 async function main() {
-  const cmd = process.argv[2]?.trim();
+  const args = process.argv.slice(2);
+  const cmd = args[0]?.trim();
 
   if (!cmd || cmd === "-h" || cmd === "--help") {
     printHelp();
+    process.exit(0);
+  }
+  if (cmd === "-V" || cmd === "--version") {
+    console.log(VERSION);
     process.exit(0);
   }
 
@@ -40,9 +51,13 @@ async function main() {
       return;
     }
     if (cmd === "verify") {
-      const args = process.argv.slice(3);
-      const prodIdx = args.indexOf("--prod");
-      const prodUrl = prodIdx >= 0 && args[prodIdx + 1] ? args[prodIdx + 1].trim() : undefined;
+      const verifyArgs = args.slice(1);
+      if (verifyArgs.includes("-h") || verifyArgs.includes("--help")) {
+        printHelp();
+        process.exit(0);
+      }
+      const prodIdx = verifyArgs.indexOf("--prod");
+      const prodUrl = prodIdx >= 0 && verifyArgs[prodIdx + 1] ? verifyArgs[prodIdx + 1].trim() : undefined;
       await cmdVerify(undefined, prodUrl ? { prodUrl } : undefined);
       return;
     }
@@ -50,8 +65,8 @@ async function main() {
     console.error(`Unknown command: ${cmd}\n`);
     printHelp();
     process.exit(1);
-  } catch (err: any) {
-    const msg = err?.message ? String(err.message) : String(err);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.error(`\nRenderShield error: ${msg}\n`);
     process.exit(1);
   }

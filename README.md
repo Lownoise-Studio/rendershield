@@ -108,6 +108,12 @@ node dist/cli.js verify
 
 This prints curl commands you can use to confirm crawler behavior.
 
+**Production check:** After deploying the Worker, run:
+
+`rendershield verify --prod https://your-domain.com`
+
+This fetches the URL as a bot and asserts the response has `x-rendershield: bot-hit` (proving the Worker served prerendered HTML). If the header is missing or `bot-fallback`, the command fails.
+
 ---
 
 ## Deployment

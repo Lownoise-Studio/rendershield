@@ -9,7 +9,7 @@ const md = new MarkdownIt({ html: false, linkify: true, typographer: true });
 
 const REQUIRED_FIELDS = "title, excerpt, datePublished, coverImage, slug";
 
-function requireString(value: any, field: string, file: string): string {
+function requireString(value: unknown, field: string, file: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error(
       `Missing required frontmatter field "${field}" in ${file}. Required fields: ${REQUIRED_FIELDS}`
@@ -18,7 +18,7 @@ function requireString(value: any, field: string, file: string): string {
   return value.trim();
 }
 
-function normalizeDate(value: any, file: string): string {
+function normalizeDate(value: unknown, file: string): string {
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return value;
   }

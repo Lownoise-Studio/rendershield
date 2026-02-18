@@ -57,7 +57,11 @@ export function renderPageHtml(cfg: RenderShieldConfig, doc: MarkdownDoc): strin
   <meta name="twitter:description" content="${escapeHtml(description)}">
   <meta name="twitter:image" content="${escapeHtml(ogImageUrl)}">
 
-  <script type="application/ld+json">${escapeHtml(JSON.stringify(jsonLd))}</script>
+  <script type="application/ld+json">${((): string => {
+    const raw = JSON.stringify(jsonLd);
+    // Case-insensitive: </script> and </SCRIPT> etc. must not break out of the tag
+    return raw.replace(/<\/script>/gi, "<\\/script>");
+  })()}</script>
 </head>
 <body>
   <main>

@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "site": {
+    "canonicalBase": "https://example.com",
+    "siteName": "Fixture Site",
+    "defaultOgImage": "https://example.com/og.jpg",
+    "authorName": "Author"
+  },
+  "content": {
+    "markdown": {
+      "baseDir": "content",
+      "collections": [
+        {
+          "name": "blog",
+          "pattern": "blog/**/*.md",
+          "routeBase": "/blog",
+          "schemaType": "Article"
+        }
+      ]
+    }
+  },
+  "output": {
+    "outDir": "dist-prerender",
+    "prettyHtml": true
+  },
+  "sitemap": { "enabled": true, "path": "/sitemap.xml" },
+  "robots": { "enabled": true, "path": "/robots.txt" },
+  "worker": { "enabled": false }
+}

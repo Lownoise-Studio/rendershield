@@ -1,4 +1,14 @@
+import { createRequire } from "node:module";
 import { RenderShieldConfig } from "../types.js";
+
+const require = createRequire(import.meta.url);
+let VERSION = "0.0.0";
+try {
+  const pkg = require("../../package.json") as { version?: string };
+  VERSION = pkg.version ?? "0.0.0";
+} catch {
+  VERSION = "unknown";
+}
 
 function jsStringArray(arr: string[]): string {
   return `[${arr.map((s) => JSON.stringify(s)).join(", ")}]`;
@@ -9,7 +19,7 @@ export function generateWorkerJs(cfg: RenderShieldConfig): string {
   const rewriteBases = cfg.worker.rewriteRouteBases;
 
   return `/**
- * RenderShield Worker (generated)
+ * RenderShield Worker (generated) v${VERSION}
  * Serves prerendered /index.html to bots on selected route bases.
  */
 
@@ -76,7 +86,7 @@ export default {
       out.headers.set("X-Final-Path", finalPath);` : ""}
       return out;
     } catch (err) {
-      return new Response("Worker error: " + (err && err.message ? err.message : String(err)), {
+      return new Response("Service temporarily unavailable.", {
         status: 500,
         headers: { "Content-Type": "text/plain; charset=utf-8" }
       });

@@ -16,9 +16,9 @@ const DEFAULT_CONFIG = {
       baseDir: "content",
       collections: [
         {
-          name: "pages",
-          pattern: "pages/**/*.md",
-          routeBase: "/pages",
+          name: "blog",
+          pattern: "blog/**/*.md",
+          routeBase: "/blog",
           schemaType: "Article"
         }
       ]
@@ -39,7 +39,7 @@ const DEFAULT_CONFIG = {
   worker: {
     enabled: true,
     lovableOrigin: "https://YOUR_SITE.lovable.app",
-    rewriteRouteBases: ["/pages/"],
+    rewriteRouteBases: ["/blog/"],
     botUserAgentPatterns: [
       "googlebot",
       "bingbot",
@@ -78,7 +78,7 @@ That's the whole trick.
 
 export async function cmdInit(cwd = process.cwd()) {
   const configPath = path.join(cwd, CONFIG_NAME);
-  const contentDir = path.join(cwd, "content", "pages");
+  const contentDir = path.join(cwd, "content", "blog");
   const samplePath = path.join(contentDir, "hello-world.md");
 
   const configExists = await fs.pathExists(configPath);
@@ -98,7 +98,7 @@ export async function cmdInit(cwd = process.cwd()) {
   const sampleExists = await fs.pathExists(samplePath);
   if (!sampleExists) {
     await fs.writeFile(samplePath, SAMPLE_POST, "utf8");
-    console.log(`Created sample content: content/pages/hello-world.md`);
+    console.log(`Created sample content: content/blog/hello-world.md`);
   } else {
     console.log(`Sample content already exists (leaving it alone)`);
   }
@@ -106,7 +106,7 @@ export async function cmdInit(cwd = process.cwd()) {
   console.log(`
 Next:
   1) Edit rendershield.config.json
-  2) Add content under content/pages/
+  2) Add content under content/blog/
   3) Run: rendershield build
 `);
 }
