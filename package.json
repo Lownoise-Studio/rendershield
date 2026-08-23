@@ -1,11 +1,32 @@
 {
   "name": "@lownoise-studio/rendershield",
-  "version": "0.3.1",
+  "version": "1.0.0",
   "description": "Boring bot-aware prerendering: real HTML for bots, SPA for humans.",
   "type": "module",
   "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "prerender",
+    "seo",
+    "bots",
+    "spa",
+    "static-site",
+    "cloudflare-workers",
+    "markdown"
+  ],
   "bin": {
     "rendershield": "dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -19,10 +40,11 @@
     "dist/**",
     "src/**",
     "docs/**",
-    "content/**",
     "DEPLOY.md",
     "README.md",
     "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
     "LICENSE"
   ],
   "repository": {

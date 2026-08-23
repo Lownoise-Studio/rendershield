@@ -4,6 +4,7 @@ import fs from "fs-extra";
 import matter from "gray-matter";
 import MarkdownIt from "markdown-it";
 import { MarkdownDoc, RenderShieldConfig } from "../types.js";
+import { renderShieldError } from "../errors.js";
 
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true });
 
@@ -11,7 +12,8 @@ const REQUIRED_FIELDS = "title, excerpt, datePublished, coverImage, slug";
 
 function requireString(value: unknown, field: string, file: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(
+    throw renderShieldError(
+      "CONTENT_INVALID",
       `Missing required frontmatter field "${field}" in ${file}. Required fields: ${REQUIRED_FIELDS}`
     );
   }
@@ -25,7 +27,10 @@ function normalizeDate(value: unknown, file: string): string {
   if (value instanceof Date) {
     return value.toISOString().slice(0, 10);
   }
-  throw new Error(`Invalid datePublished in ${file}. Use format YYYY-MM-DD.`);
+  throw renderShieldError(
+    "CONTENT_INVALID",
+    `Invalid datePublished in ${file}. Use format YYYY-MM-DD.`
+  );
 }
 
 export async function loadAllMarkdownDocs(cfg: RenderShieldConfig, cwd = process.cwd()): Promise<MarkdownDoc[]> {
@@ -47,7 +52,8 @@ export async function loadAllMarkdownDocs(cfg: RenderShieldConfig, cwd = process
 
       const datePublishedRaw = parsed.data?.datePublished;
       if (datePublishedRaw === undefined || datePublishedRaw === null) {
-        throw new Error(
+        throw renderShieldError(
+          "CONTENT_INVALID",
           `Missing required frontmatter field "datePublished" in ${abs}. Required fields: ${REQUIRED_FIELDS}`
         );
       }

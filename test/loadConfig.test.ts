@@ -105,7 +105,7 @@ describe("loadConfig", () => {
   });
 
   it("throws when site.canonicalBase is missing", async () => {
-    const c = { ...minimalValid };
+    const c = structuredClone(minimalValid);
     delete (c.site as Record<string, unknown>).canonicalBase;
     await writeConfig(c);
     await expect(loadConfig(tmpDir)).rejects.toThrow(/canonicalBase/);
@@ -152,5 +152,39 @@ describe("loadConfig", () => {
     expect(cfg.worker.lovableOrigin).toBe("https://origin.example.com");
     expect(cfg.worker.rewriteRouteBases).toEqual(["/blog/"]);
     expect(cfg.worker.botUserAgentPatterns).toEqual(["googlebot", "bingbot"]);
+  });
+
+  it("defaults collection schemaType to Article when omitted", async () => {
+    await writeConfig({
+      ...structuredClone(minimalValid),
+      content: {
+        markdown: {
+          baseDir: "content",
+          collections: [{ name: "blog", pattern: "blog/**/*.md", routeBase: "/blog" }],
+        },
+      },
+    });
+    const cfg = await loadConfig(tmpDir);
+    expect(cfg.content.markdown.collections[0].schemaType).toBe("Article");
+  });
+
+  it("rejects invalid collection schemaType", async () => {
+    await writeConfig({
+      ...structuredClone(minimalValid),
+      content: {
+        markdown: {
+          baseDir: "content",
+          collections: [
+            {
+              name: "blog",
+              pattern: "blog/**/*.md",
+              routeBase: "/blog",
+              schemaType: "FAQPage",
+            },
+          ],
+        },
+      },
+    });
+    await expect(loadConfig(tmpDir)).rejects.toThrow(/schemaType must be one of/);
   });
 });

@@ -13,7 +13,8 @@
     "outDir": "dist",
 
     /* Emit */
-    "declaration": false,
+    "declaration": true,
+    "declarationMap": true,
     "sourceMap": true,
 
     /* Interop & module behavior */

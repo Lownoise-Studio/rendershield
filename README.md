@@ -72,13 +72,46 @@ and (optionally) that production routing serves it.
 
 ## Quickstart
 
-**Install dependencies**
+Requires **Node.js 18+**.
+
+### From npm
 
 ```bash
+npm install -D @lownoise-studio/rendershield
+```
+
+```bash
+npx rendershield init
+npx rendershield build
+npx rendershield verify
+```
+
+Add a script to `package.json` if you prefer:
+
+```json
+{
+  "scripts": {
+    "prerender": "rendershield build",
+    "prerender:verify": "rendershield verify"
+  }
+}
+```
+
+### From source
+
+```bash
+git clone https://github.com/Lownoise-Studio/rendershield.git
+cd rendershield
 npm install
 ```
 
 **Initialize**
+
+```bash
+npm run start -- init
+```
+
+Or after `npm run build`:
 
 ```bash
 rendershield init
@@ -94,6 +127,12 @@ content/blog/
 
 ```bash
 rendershield build
+```
+
+Or with npx:
+
+```bash
+npx rendershield build
 ```
 
 **Output**
@@ -120,6 +159,22 @@ This command:
 - Requires `x-rendershield: bot-hit`
 - Validates metadata + JSON-LD + article content
 - Exits with code 1 if anything fails
+
+---
+
+## Programmatic API
+
+RenderShield can be used as a library:
+
+```ts
+import { cmdBuild, loadConfig, checkPrerenderContract, RenderShieldError } from "@lownoise-studio/rendershield";
+
+await cmdBuild(process.cwd());
+```
+
+Exported commands, config loaders, HTML renderer, contract validators, and artifact generators are available from the package root. Errors throw `RenderShieldError` with stable `code` values for CI and tooling.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup.
 
 ---
 

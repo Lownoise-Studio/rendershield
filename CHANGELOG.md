@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-08-23
+
+### Added
+
+- **Programmatic API**: import `@lownoise-studio/rendershield` for `cmdInit`, `cmdBuild`, `cmdVerify`, config loading, HTML rendering, contract validation, and artifact generators.
+- **`RenderShieldError`**: stable error codes (`CONFIG_MISSING`, `CONFIG_INVALID`, `OUTPUT_PATH_UNSAFE`, `CONTENT_INVALID`, `BUILD_FAILED`, `VALIDATION_FAILED`, `VERIFY_FAILED`, `CLI_INVALID_ARGS`) with optional `details` for library consumers.
+- **TypeScript declarations**: published `.d.ts` via `package.json` `types` and `exports` map.
+- **CI**: GitHub Actions workflow runs build and tests on Node 18, 20, and 22.
+- **Docs**: `CONTRIBUTING.md` and `SECURITY.md`.
+- Tests for `cmdInit`, local and `--prod` `cmdVerify`, public API exports, and `schemaType` rendering.
+- `schemaType` config field now drives JSON-LD `@type` (`Article`, `BlogPosting`, `WebPage`).
+
+### Fixed
+
+- `verify` without build output now exits with failure (`VERIFY_FAILED`) instead of succeeding silently.
+- `verify --prod` without a URL is rejected with `CLI_INVALID_ARGS` instead of falling back to local verify.
+
+### Changed
+
+- `cmdVerify` returns structured `VerifyResult` on success for programmatic use.
+- CLI errors include error codes when thrown as `RenderShieldError`.
+- `package.json`: `engines.node >= 18`, `exports`, `keywords`; sample `content/**` no longer published to npm.
+- README: npm install / `npx` quickstart and programmatic API section.
+
+## [0.3.1] - 2025-02-18
+
 ### Added
 
 - `verify --prod <url>`: production check that asserts `x-rendershield: bot-hit` and runs the same HTML contract validation as build.

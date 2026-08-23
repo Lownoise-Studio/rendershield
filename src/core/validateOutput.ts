@@ -1,3 +1,5 @@
+import { renderShieldError } from "../errors.js";
+
 export type ValidateParams = {
   html: string;
   outFile: string;
@@ -255,7 +257,12 @@ export function validatePrerenderHtml(params: ValidateParams): void {
       missing.map((m) => `- ${m}`).join("\n") +
       `\n\nFix the source content or renderer so bots receive complete HTML. Check frontmatter and template (title, excerpt, datePublished, coverImage, slug).`;
 
-    throw new Error(msg);
+    throw renderShieldError("VALIDATION_FAILED", msg, {
+      routePath: params.routePath,
+      outFile: params.outFile,
+      sourcePath: params.sourcePath,
+      missing,
+    });
   }
 }
 

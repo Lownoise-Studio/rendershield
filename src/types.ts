@@ -1,3 +1,6 @@
+export const SCHEMA_TYPES = ["Article", "BlogPosting", "WebPage"] as const;
+export type SchemaType = (typeof SCHEMA_TYPES)[number];
+
 export type RenderShieldConfig = {
     version: 1;
     site: {
@@ -13,7 +16,7 @@ export type RenderShieldConfig = {
           name: string; // blog
           pattern: string; // blog/**/*.md
           routeBase: string; // /blog
-          schemaType: "Article"; // v0 only supports Article
+          schemaType: SchemaType;
         }>;
       };
     };

@@ -1,4 +1,4 @@
-import { MarkdownDoc, RenderShieldConfig } from "../types.js";
+import { MarkdownDoc, RenderShieldConfig, SchemaType } from "../types.js";
 
 function escapeHtml(s: string): string {
   return s
@@ -15,6 +15,37 @@ function joinUrl(base: string, pathname: string): string {
   return b + p;
 }
 
+function resolveSchemaType(cfg: RenderShieldConfig, doc: MarkdownDoc): SchemaType {
+  const collection = cfg.content.markdown.collections.find((c) => c.name === doc.collection);
+  return collection?.schemaType ?? "Article";
+}
+
+function buildJsonLd(
+  schemaType: SchemaType,
+  cfg: RenderShieldConfig,
+  doc: MarkdownDoc,
+  canonicalUrl: string,
+  ogImageUrl: string
+): Record<string, unknown> {
+  const base = {
+    "@context": "https://schema.org",
+    "@type": schemaType,
+    mainEntityOfPage: canonicalUrl,
+    image: ogImageUrl,
+  };
+
+  if (schemaType === "WebPage") {
+    return { ...base, name: doc.title };
+  }
+
+  return {
+    ...base,
+    headline: doc.title,
+    author: { "@type": "Person", name: cfg.site.authorName },
+    datePublished: doc.datePublished,
+  };
+}
+
 export function renderPageHtml(cfg: RenderShieldConfig, doc: MarkdownDoc): string {
   const canonicalUrl = joinUrl(cfg.site.canonicalBase, doc.routePath);
   const ogImageUrl = doc.coverImage.startsWith("http")
@@ -23,16 +54,9 @@ export function renderPageHtml(cfg: RenderShieldConfig, doc: MarkdownDoc): strin
 
   const title = `${doc.title} - ${cfg.site.siteName}`;
   const description = doc.excerpt;
-
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Article",
-    headline: doc.title,
-    author: { "@type": "Person", name: cfg.site.authorName },
-    datePublished: doc.datePublished,
-    image: ogImageUrl,
-    mainEntityOfPage: canonicalUrl,
-  };
+  const schemaType = resolveSchemaType(cfg, doc);
+  const ogType = schemaType === "WebPage" ? "website" : "article";
+  const jsonLd = buildJsonLd(schemaType, cfg, doc, canonicalUrl, ogImageUrl);
 
   // NOTE: doc.htmlContent is already HTML from markdown-it.
   // We trust it as generated output, not user-injected raw HTML (markdown-it html:false).
@@ -46,7 +70,7 @@ export function renderPageHtml(cfg: RenderShieldConfig, doc: MarkdownDoc): strin
   <meta name="description" content="${escapeHtml(description)}">
   <link rel="canonical" href="${escapeHtml(canonicalUrl)}">
 
-  <meta property="og:type" content="article">
+  <meta property="og:type" content="${ogType}">
   <meta property="og:title" content="${escapeHtml(doc.title)}">
   <meta property="og:description" content="${escapeHtml(description)}">
   <meta property="og:image" content="${escapeHtml(ogImageUrl)}">

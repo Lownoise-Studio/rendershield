@@ -1,7 +1,11 @@
 import fs from "fs-extra";
 import path from "node:path";
 import { loadConfig } from "../core/loadConfig.js";
-import { checkPrerenderContract } from "../core/validateOutput.js";
+import {
+  checkPrerenderContract,
+  type ContractCheckResult,
+} from "../core/validateOutput.js";
+import { renderShieldError } from "../errors.js";
 
 function joinUrl(base: string, routePath: string): string {
   const b = base.endsWith("/") ? base.slice(0, -1) : base;
@@ -84,13 +88,28 @@ function looksLikeSpaShell(html: string): { likely: boolean; reason?: string } {
 
 export type VerifyProdOptions = { prodUrl: string };
 
+export type VerifyLocalResult = {
+  mode: "local";
+  canonicalBase: string;
+  routePath: string;
+  outputFile: string;
+  url: string;
+};
+
+export type VerifyProdResult = {
+  mode: "prod";
+  url: string;
+  contract: ContractCheckResult;
+};
+
+export type VerifyResult = VerifyLocalResult | VerifyProdResult;
+
 export async function cmdVerify(
   cwd = process.cwd(),
   options?: VerifyProdOptions
-) {
+): Promise<VerifyResult> {
   if (options?.prodUrl) {
-    await runVerifyProd(options.prodUrl);
-    return;
+    return runVerifyProd(options.prodUrl);
   }
 
   const cfg = await loadConfig(cwd);
@@ -99,33 +118,26 @@ export async function cmdVerify(
   const exists = await fs.pathExists(outDirAbs);
 
   if (!exists) {
-    console.log(`
-RenderShield verify
-
-No prerender output directory found: ${cfg.output.outDir}/
-
-Run:
-  node dist/cli.js build
-`);
-    return;
+    throw renderShieldError(
+      "VERIFY_FAILED",
+      `No prerender output directory found: ${cfg.output.outDir}/. Run: rendershield build`,
+      { outDir: cfg.output.outDir }
+    );
   }
 
   const firstIndex = await findFirstIndexHtml(outDirAbs);
 
   if (!firstIndex) {
-    console.log(`
-RenderShield verify
-
-No prerendered pages found inside: ${cfg.output.outDir}/
-
-Run:
-  node dist/cli.js build
-`);
-    return;
+    throw renderShieldError(
+      "VERIFY_FAILED",
+      `No prerendered pages found inside: ${cfg.output.outDir}/. Run: rendershield build`,
+      { outDir: cfg.output.outDir }
+    );
   }
 
   const routePath = indexHtmlPathToRoute(outDirAbs, firstIndex);
   const url = joinUrl(cfg.site.canonicalBase, routePath);
+  const outputFile = path.relative(cwd, firstIndex);
 
   console.log(`
 RenderShield verify
@@ -133,7 +145,7 @@ RenderShield verify
 Using:
   canonicalBase: ${cfg.site.canonicalBase}
   routePath:     ${routePath}
-  output file:   ${path.relative(cwd, firstIndex)}
+  output file:   ${outputFile}
 
 Smoke tests:
 
@@ -149,9 +161,17 @@ Smoke tests:
 Expected: x-rendershield: bot-hit (proves Worker served prerender to bot).
 If debugHeaders enabled: X-Bot-Detected, X-Prerender, X-Final-Path.
 `);
+
+  return {
+    mode: "local",
+    canonicalBase: cfg.site.canonicalBase,
+    routePath,
+    outputFile,
+    url,
+  };
 }
 
-async function runVerifyProd(url: string): Promise<void> {
+async function runVerifyProd(url: string): Promise<VerifyProdResult> {
   const normalizedUrl = url.startsWith("http") ? url : `https://${url}`;
 
   let botHtml: string;
@@ -179,26 +199,32 @@ async function runVerifyProd(url: string): Promise<void> {
     humanHtml = await humanRes.text();
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(
-      `RenderShield verify --prod: failed to fetch ${normalizedUrl}. ${msg}`
+    throw renderShieldError(
+      "VERIFY_FAILED",
+      `verify --prod: failed to fetch ${normalizedUrl}. ${msg}`,
+      { url: normalizedUrl }
     );
   }
 
   // Prove routing: Worker must set x-rendershield: bot-hit for bot requests. No inference.
   const routingOk = xRenderShield === "bot-hit";
   if (xRenderShield === "bot-fallback") {
-    throw new Error(
-      `RenderShield verify --prod: bot request received x-rendershield: bot-fallback. ` +
-        `Prerender origin returned non-200; Worker fell back to SPA. Fix deployment or origin so bots get prerendered HTML.`
+    throw renderShieldError(
+      "VERIFY_FAILED",
+      `verify --prod: bot request received x-rendershield: bot-fallback. ` +
+        `Prerender origin returned non-200; Worker fell back to SPA. Fix deployment or origin so bots get prerendered HTML.`,
+      { url: normalizedUrl, xRenderShield }
     );
   }
   if (!routingOk) {
     const hint = xRenderShield == null
       ? " If no Worker is deployed, use verify without --prod to check local/build output."
       : "";
-    throw new Error(
-      `RenderShield verify --prod: expected x-rendershield: bot-hit (proving Worker routed bot to prerender). ` +
-        `Got: ${xRenderShield ?? "(missing)"}. Ensure the Worker is deployed and bound to this route.${hint}`
+    throw renderShieldError(
+      "VERIFY_FAILED",
+      `verify --prod: expected x-rendershield: bot-hit (proving Worker routed bot to prerender). ` +
+        `Got: ${xRenderShield ?? "(missing)"}. Ensure the Worker is deployed and bound to this route.${hint}`,
+      { url: normalizedUrl, xRenderShield }
     );
   }
 
@@ -229,8 +255,12 @@ Human response:
 `);
 
   if (!contract.ok) {
-    throw new Error(
-      `Production URL did not satisfy bot contract. Missing: ${contract.missing.join("; ")}`
+    throw renderShieldError(
+      "VERIFY_FAILED",
+      `Production URL did not satisfy bot contract. Missing: ${contract.missing.join("; ")}`,
+      { url: normalizedUrl, missing: contract.missing }
     );
   }
+
+  return { mode: "prod", url: normalizedUrl, contract };
 }

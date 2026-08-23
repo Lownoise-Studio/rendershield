@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { cmdInit } from "./commands/init.js";
 import { cmdBuild } from "./commands/build.js";
 import { cmdVerify } from "./commands/verify.js";
+import { formatCliError, renderShieldError } from "./errors.js";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../package.json") as { version?: string };
@@ -57,8 +58,18 @@ async function main() {
         process.exit(0);
       }
       const prodIdx = verifyArgs.indexOf("--prod");
-      const prodUrl = prodIdx >= 0 && verifyArgs[prodIdx + 1] ? verifyArgs[prodIdx + 1].trim() : undefined;
-      await cmdVerify(undefined, prodUrl ? { prodUrl } : undefined);
+      if (prodIdx >= 0) {
+        const prodUrl = verifyArgs[prodIdx + 1]?.trim();
+        if (!prodUrl || prodUrl.startsWith("-")) {
+          throw renderShieldError(
+            "CLI_INVALID_ARGS",
+            "verify --prod requires a URL. Example: rendershield verify --prod https://example.com/blog/hello-world"
+          );
+        }
+        await cmdVerify(undefined, { prodUrl });
+        return;
+      }
+      await cmdVerify();
       return;
     }
 
@@ -66,7 +77,7 @@ async function main() {
     printHelp();
     process.exit(1);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = formatCliError(err);
     console.error(`\nRenderShield error: ${msg}\n`);
     process.exit(1);
   }

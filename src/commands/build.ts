@@ -7,6 +7,7 @@ import { generateSitemapXml } from "../core/generateSitemap.js";
 import { generateRobotsTxt } from "../core/generateRobots.js";
 import { generateWorkerJs } from "../core/generateWorker.js";
 import { validatePrerenderHtml } from "../core/validateOutput.js";
+import { renderShieldError } from "../errors.js";
 
 function routeToOutDir(outDirAbs: string, routePath: string): string {
   // /blog/slug -> outDir/blog/slug/index.html
@@ -28,7 +29,10 @@ async function validateOutputPath(outDir: string, cwd: string): Promise<void> {
     cwdReal = await fs.realpath(cwdAbs);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`Cannot resolve project root: ${cwdAbs}. ${msg}`);
+    throw renderShieldError(
+      "OUTPUT_PATH_UNSAFE",
+      `Cannot resolve project root: ${cwdAbs}. ${msg}`
+    );
   }
 
   const outDirAbs = path.resolve(cwdAbs, outDir);
@@ -40,7 +44,8 @@ async function validateOutputPath(outDir: string, cwd: string): Promise<void> {
   // rarely returns absolute on Windows; startsWith("..") and path.isAbsolute(rel) cover escapes.
   const relative = path.relative(normalizedCwd, normalizedOut);
   if (relative.startsWith("..") || relative === ".." || path.isAbsolute(relative)) {
-    throw new Error(
+    throw renderShieldError(
+      "OUTPUT_PATH_UNSAFE",
       `Output directory "${outDir}" resolves outside project root. Use a relative path within the project.`
     );
   }
@@ -49,7 +54,8 @@ async function validateOutputPath(outDir: string, cwd: string): Promise<void> {
   const rootPaths = ["/", "c:\\", "c:/"];
   const outLower = normalizedOut.toLowerCase();
   if (rootPaths.includes(outLower)) {
-    throw new Error(
+    throw renderShieldError(
+      "OUTPUT_PATH_UNSAFE",
       `Output directory "${outDir}" resolves to root filesystem. This is not allowed for safety.`
     );
   }
@@ -57,7 +63,8 @@ async function validateOutputPath(outDir: string, cwd: string): Promise<void> {
   // Reject: output dir equals project root (would delete entire project). Case-fold after normalize.
   const cwdLower = normalizedCwd.toLowerCase();
   if (outLower === cwdLower) {
-    throw new Error(
+    throw renderShieldError(
+      "OUTPUT_PATH_UNSAFE",
       `Output directory "${outDir}" cannot be the project root. Use a subdirectory (e.g. dist-prerender).`
     );
   }
@@ -73,7 +80,8 @@ async function validateOutputPath(outDir: string, cwd: string): Promise<void> {
     const outDirRealNorm = path.normalize(outDirReal);
     const relativeReal = path.relative(normalizedCwd, outDirRealNorm);
     if (relativeReal.startsWith("..") || relativeReal === ".." || path.isAbsolute(relativeReal)) {
-      throw new Error(
+      throw renderShieldError(
+        "OUTPUT_PATH_UNSAFE",
         `Output directory "${outDir}" resolves (via symlink) outside project root. Use a path that does not escape the project.`
       );
     }
@@ -96,13 +104,15 @@ async function validateOutputPath(outDir: string, cwd: string): Promise<void> {
         // Nearest existing parent is filesystem root → outside project, reject
         const parentLower = parentRealNorm.toLowerCase();
         if (rootPaths.includes(parentLower)) {
-          throw new Error(
+          throw renderShieldError(
+            "OUTPUT_PATH_UNSAFE",
             `Output directory "${outDir}" has a parent that resolves to filesystem root. Use a path inside the project.`
           );
         }
         const relParent = path.relative(normalizedCwd, parentRealNorm);
         if (relParent.startsWith("..") || relParent === ".." || path.isAbsolute(relParent)) {
-          throw new Error(
+          throw renderShieldError(
+            "OUTPUT_PATH_UNSAFE",
             `Output directory "${outDir}" has a parent that resolves (via symlink) outside project root. Use a path that does not escape the project.`
           );
         }
@@ -115,7 +125,8 @@ async function validateOutputPath(outDir: string, cwd: string): Promise<void> {
     }
     if (!foundParentInsideRoot) {
       // No existing parent found before hitting dirname loop stop (shouldn't happen on a normal FS)
-      throw new Error(
+      throw renderShieldError(
+        "OUTPUT_PATH_UNSAFE",
         `Output directory "${outDir}" could not be validated: no existing parent path found. Use a path inside the project.`
       );
     }
@@ -137,7 +148,10 @@ export async function cmdBuild(cwd = process.cwd()) {
   const docs = await loadAllMarkdownDocs(cfg, cwd);
 
   if (docs.length === 0) {
-    throw new Error("No markdown documents found. Check content paths/patterns.");
+    throw renderShieldError(
+      "BUILD_FAILED",
+      "No markdown documents found. Check content paths/patterns."
+    );
   }
 
   // Generate pages (validate BEFORE writing)
