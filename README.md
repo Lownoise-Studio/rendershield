@@ -150,6 +150,15 @@ rendershield verify
 
 Prints curl commands for a built page (from `dist-prerender/`). Use this after `build` to get smoke-test commands for your Worker setup. Exits with code 1 if output is missing; it does **not** fetch URLs or validate HTML.
 
+**Local contract check (CI-friendly)**
+
+```bash
+rendershield verify --check
+rendershield verify --all --check
+```
+
+Validates built HTML against the same bot contract as `build`, without network access.
+
 **Production verify (after deploying Worker)**
 
 Pass a **prerendered route URL** (not just the domain root):
@@ -165,7 +174,9 @@ This command:
 - Validates metadata + JSON-LD + article content on the bot response
 - Exits with code 1 if anything fails
 
-Proves routing for **that URL** only. Repeat for other routes you care about.
+Proves routing for **that URL** only. Use `rendershield verify --prod --all` to check every route from build output.
+
+Config reference: [docs/CONFIG.md](docs/CONFIG.md) · JSON Schema: `rendershield.config.schema.json`
 
 ---
 

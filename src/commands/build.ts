@@ -8,6 +8,7 @@ import { generateRobotsTxt } from "../core/generateRobots.js";
 import { generateWorkerJs } from "../core/generateWorker.js";
 import { validatePrerenderHtml } from "../core/validateOutput.js";
 import { renderShieldError } from "../errors.js";
+import type { CommandOptions } from "../configPath.js";
 
 function routeToOutDir(outDirAbs: string, routePath: string): string {
   // /blog/slug -> outDir/blog/slug/index.html
@@ -133,8 +134,8 @@ async function validateOutputPath(outDir: string, cwd: string): Promise<void> {
   }
 }
 
-export async function cmdBuild(cwd = process.cwd()) {
-  const cfg = await loadConfig(cwd);
+export async function cmdBuild(cwd = process.cwd(), options?: CommandOptions) {
+  const cfg = await loadConfig(cwd, options);
 
   // Validate output path before any destructive operations
   await validateOutputPath(cfg.output.outDir, cwd);

@@ -34,7 +34,7 @@ export type RenderShieldConfig = {
     };
     worker: {
       enabled: boolean;
-      lovableOrigin: string; // https://YOUR_SITE.lovable.app
+      spaOrigin: string; // https://app.example.com — human SPA / hosting origin
       rewriteRouteBases: string[]; // ["/blog/"]
       botUserAgentPatterns: string[];
       debugHeaders: boolean;

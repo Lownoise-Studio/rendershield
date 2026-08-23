@@ -52,13 +52,14 @@ describe("cmdVerify --prod", () => {
     );
 
     const result = await cmdVerify(process.cwd(), {
+      prod: true,
       prodUrl: "https://example.com/blog/post",
     });
 
     expect(result.mode).toBe("prod");
     if (result.mode === "prod") {
-      expect(result.url).toBe("https://example.com/blog/post");
-      expect(result.contract.ok).toBe(true);
+      expect(result.pages[0].url).toBe("https://example.com/blog/post");
+      expect(result.pages[0].contract.ok).toBe(true);
     }
   });
 
@@ -72,7 +73,7 @@ describe("cmdVerify --prod", () => {
     );
 
     await expect(
-      cmdVerify(process.cwd(), { prodUrl: "https://example.com" })
+      cmdVerify(process.cwd(), { prod: true, prodUrl: "https://example.com" })
     ).rejects.toSatisfy((err: unknown) => {
       return isRenderShieldError(err) && err.code === "VERIFY_FAILED";
     });
@@ -88,7 +89,7 @@ describe("cmdVerify --prod", () => {
     );
 
     await expect(
-      cmdVerify(process.cwd(), { prodUrl: "https://example.com" })
+      cmdVerify(process.cwd(), { prod: true, prodUrl: "https://example.com" })
     ).rejects.toSatisfy((err: unknown) => {
       return (
         isRenderShieldError(err) &&
@@ -111,7 +112,7 @@ describe("cmdVerify --prod", () => {
     );
 
     await expect(
-      cmdVerify(process.cwd(), { prodUrl: "https://example.com" })
+      cmdVerify(process.cwd(), { prod: true, prodUrl: "https://example.com" })
     ).rejects.toSatisfy((err: unknown) => {
       return isRenderShieldError(err) && err.code === "VERIFY_FAILED";
     });

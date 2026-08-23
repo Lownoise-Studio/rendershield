@@ -9,10 +9,11 @@ export { cmdInit } from "./commands/init.js";
 export { cmdBuild } from "./commands/build.js";
 export {
   cmdVerify,
-  type VerifyProdOptions,
+  type VerifyOptions,
   type VerifyLocalResult,
   type VerifyProdResult,
   type VerifyResult,
+  type VerifyPageResult,
 } from "./commands/verify.js";
 
 export { loadConfig } from "./core/loadConfig.js";
@@ -28,6 +29,8 @@ export { generateSitemapXml } from "./core/generateSitemap.js";
 export { generateRobotsTxt } from "./core/generateRobots.js";
 export { generateWorkerJs } from "./core/generateWorker.js";
 
+export type { CommandOptions } from "./configPath.js";
+export { DEFAULT_CONFIG_NAME, resolveConfigFile } from "./configPath.js";
 export type { RenderShieldConfig, MarkdownDoc, SchemaType } from "./types.js";
 export { SCHEMA_TYPES } from "./types.js";
 

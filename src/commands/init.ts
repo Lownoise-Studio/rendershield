@@ -1,7 +1,6 @@
 import fs from "fs-extra";
 import path from "node:path";
-
-const CONFIG_NAME = "rendershield.config.json";
+import { resolveConfigFile, type CommandOptions } from "../configPath.js";
 
 const DEFAULT_CONFIG = {
   version: 1,
@@ -38,7 +37,7 @@ const DEFAULT_CONFIG = {
   },
   worker: {
     enabled: true,
-    lovableOrigin: "https://YOUR_SITE.lovable.app",
+    spaOrigin: "https://app.example.com",
     rewriteRouteBases: ["/blog/"],
     botUserAgentPatterns: [
       "googlebot",
@@ -76,8 +75,9 @@ This is **RenderShield**.
 That's the whole trick.
 `;
 
-export async function cmdInit(cwd = process.cwd()) {
-  const configPath = path.join(cwd, CONFIG_NAME);
+export async function cmdInit(cwd = process.cwd(), options?: CommandOptions) {
+  const configPath = resolveConfigFile(cwd, options?.configPath);
+  const configName = path.basename(configPath);
   const contentDir = path.join(cwd, "content", "blog");
   const samplePath = path.join(contentDir, "hello-world.md");
 
@@ -88,9 +88,9 @@ export async function cmdInit(cwd = process.cwd()) {
       JSON.stringify(DEFAULT_CONFIG, null, 2) + "\n",
       "utf8"
     );
-    console.log(`Created ${CONFIG_NAME}`);
+    console.log(`Created ${configName}`);
   } else {
-    console.log(`${CONFIG_NAME} already exists (leaving it alone)`);
+    console.log(`${configName} already exists (leaving it alone)`);
   }
 
   await fs.ensureDir(contentDir);
@@ -105,7 +105,7 @@ export async function cmdInit(cwd = process.cwd()) {
 
   console.log(`
 Next:
-  1) Edit rendershield.config.json
+  1) Edit ${configName}
   2) Add content under content/blog/
   3) Run: rendershield build
 `);

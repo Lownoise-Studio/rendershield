@@ -2,10 +2,15 @@ import fs from "fs-extra";
 import path from "node:path";
 import { loadConfig } from "../core/loadConfig.js";
 import {
+  listPrerenderIndexFiles,
+  indexHtmlPathToRoute,
+} from "../core/listOutputRoutes.js";
+import {
   checkPrerenderContract,
   type ContractCheckResult,
 } from "../core/validateOutput.js";
 import { renderShieldError } from "../errors.js";
+import type { CommandOptions } from "../configPath.js";
 
 function joinUrl(base: string, routePath: string): string {
   const b = base.endsWith("/") ? base.slice(0, -1) : base;
@@ -13,56 +18,11 @@ function joinUrl(base: string, routePath: string): string {
   return b + p;
 }
 
-async function findFirstIndexHtml(outDirAbs: string): Promise<string | null> {
-  const stack: string[] = [outDirAbs];
-
-  while (stack.length > 0) {
-    const current = stack.pop() as string;
-
-    let entries: fs.Dirent[];
-    try {
-      entries = await fs.readdir(current, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-
-    entries.sort((a, b) => a.name.localeCompare(b.name));
-
-    for (const entry of entries) {
-      const full = path.join(current, entry.name);
-
-      if (entry.isDirectory()) {
-        stack.push(full);
-        continue;
-      }
-
-      if (entry.isFile() && entry.name.toLowerCase() === "index.html") {
-        // Ignore index.html at the output root; prefer a routed page like
-        // <section>/<slug>/index.html (or deeper).
-        const rel = path.relative(outDirAbs, full);
-        const parts = rel.split(path.sep).filter(Boolean);
-        if (parts.length >= 2) return full;
-      }
-    }
-  }
-
-  return null;
-}
-
-function indexHtmlPathToRoute(outDirAbs: string, indexPathAbs: string): string {
-  const rel = path.relative(outDirAbs, indexPathAbs);
-  // rel: <section>/<slug>/index.html
-  const noFile = rel.replace(/index\.html$/i, "");
-  const normalized = noFile.split(path.sep).join("/").replace(/\/+$/, "");
-  return "/" + normalized.replace(/^\/+/, "");
-}
-
 const BOT_UA =
   "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
 const HUMAN_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-/** Heuristic: likely SPA shell if body has almost no visible content and no article. */
 function looksLikeSpaShell(html: string): { likely: boolean; reason?: string } {
   const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
   const bodyHtml = bodyMatch ? bodyMatch[1] : html;
@@ -86,48 +46,102 @@ function looksLikeSpaShell(html: string): { likely: boolean; reason?: string } {
   return { likely: false };
 }
 
-export type VerifyProdOptions = { prodUrl: string };
+export type VerifyPageResult = {
+  routePath: string;
+  outputFile: string;
+  url: string;
+  contract?: ContractCheckResult;
+};
+
+export type VerifyOptions = CommandOptions & {
+  /** Set when --prod is passed (URL may be omitted with --all). */
+  prod?: boolean;
+  prodUrl?: string;
+  check?: boolean;
+  all?: boolean;
+};
 
 export type VerifyLocalResult = {
   mode: "local";
   canonicalBase: string;
-  routePath: string;
-  outputFile: string;
-  url: string;
+  checked: boolean;
+  ok: boolean;
+  pages: VerifyPageResult[];
 };
 
 export type VerifyProdResult = {
   mode: "prod";
-  url: string;
-  contract: ContractCheckResult;
+  ok: boolean;
+  pages: Array<{ url: string; contract: ContractCheckResult }>;
 };
 
 export type VerifyResult = VerifyLocalResult | VerifyProdResult;
 
 export async function cmdVerify(
   cwd = process.cwd(),
-  options?: VerifyProdOptions
+  options: VerifyOptions = {}
 ): Promise<VerifyResult> {
-  if (options?.prodUrl) {
-    return runVerifyProd(options.prodUrl);
+  if (options.prod || options.prodUrl) {
+    return runVerifyProdMode(cwd, options);
   }
 
-  const cfg = await loadConfig(cwd);
+  if (options.check) {
+    return runLocalCheckMode(cwd, options);
+  }
 
-  const outDirAbs = path.join(cwd, cfg.output.outDir);
-  const exists = await fs.pathExists(outDirAbs);
-
-  if (!exists) {
+  if (options.all) {
     throw renderShieldError(
-      "VERIFY_FAILED",
-      `No prerender output directory found: ${cfg.output.outDir}/. Run: rendershield build`,
-      { outDir: cfg.output.outDir }
+      "CLI_INVALID_ARGS",
+      "verify --all requires --check (local) or --prod (production). Example: rendershield verify --all --check"
     );
   }
 
-  const firstIndex = await findFirstIndexHtml(outDirAbs);
+  return runLocalSmoke(cwd, options);
+}
 
-  if (!firstIndex) {
+async function runVerifyProdMode(
+  cwd: string,
+  options: VerifyOptions
+): Promise<VerifyProdResult> {
+  const cfg = await loadConfig(cwd, options);
+  const outDirAbs = path.join(cwd, cfg.output.outDir);
+
+  if (options.all) {
+    await assertOutputExists(outDirAbs, cfg.output.outDir);
+    const indexFiles = await listPrerenderIndexFiles(outDirAbs);
+    if (indexFiles.length === 0) {
+      throw renderShieldError(
+        "VERIFY_FAILED",
+        `No prerendered pages found inside: ${cfg.output.outDir}/. Run: rendershield build`,
+        { outDir: cfg.output.outDir }
+      );
+    }
+    return runVerifyProdAll(cfg, cwd, outDirAbs, indexFiles);
+  }
+
+  if (!options.prodUrl) {
+    throw renderShieldError(
+      "CLI_INVALID_ARGS",
+      "verify --prod requires a URL, or use --prod --all to check every route from build output."
+    );
+  }
+
+  const single = await fetchAndVerifyProd(
+    options.prodUrl.startsWith("http") ? options.prodUrl : `https://${options.prodUrl}`
+  );
+  return { mode: "prod", ok: true, pages: [single] };
+}
+
+async function runLocalCheckMode(
+  cwd: string,
+  options: VerifyOptions
+): Promise<VerifyLocalResult> {
+  const cfg = await loadConfig(cwd, options);
+  const outDirAbs = path.join(cwd, cfg.output.outDir);
+  await assertOutputExists(outDirAbs, cfg.output.outDir);
+
+  const indexFiles = await listPrerenderIndexFiles(outDirAbs);
+  if (indexFiles.length === 0) {
     throw renderShieldError(
       "VERIFY_FAILED",
       `No prerendered pages found inside: ${cfg.output.outDir}/. Run: rendershield build`,
@@ -135,6 +149,41 @@ export async function cmdVerify(
     );
   }
 
+  if (options.all) {
+    return runLocalCheckAll(cwd, cfg, outDirAbs, indexFiles);
+  }
+
+  return runLocalCheckOne(cwd, cfg, outDirAbs, indexFiles[0]);
+}
+
+async function assertOutputExists(outDirAbs: string, outDir: string): Promise<void> {
+  if (!(await fs.pathExists(outDirAbs))) {
+    throw renderShieldError(
+      "VERIFY_FAILED",
+      `No prerender output directory found: ${outDir}/. Run: rendershield build`,
+      { outDir }
+    );
+  }
+}
+
+async function runLocalSmoke(
+  cwd: string,
+  options: VerifyOptions
+): Promise<VerifyLocalResult> {
+  const cfg = await loadConfig(cwd, options);
+  const outDirAbs = path.join(cwd, cfg.output.outDir);
+  await assertOutputExists(outDirAbs, cfg.output.outDir);
+
+  const indexFiles = await listPrerenderIndexFiles(outDirAbs);
+  if (indexFiles.length === 0) {
+    throw renderShieldError(
+      "VERIFY_FAILED",
+      `No prerendered pages found inside: ${cfg.output.outDir}/. Run: rendershield build`,
+      { outDir: cfg.output.outDir }
+    );
+  }
+
+  const firstIndex = indexFiles[0];
   const routePath = indexHtmlPathToRoute(outDirAbs, firstIndex);
   const url = joinUrl(cfg.site.canonicalBase, routePath);
   const outputFile = path.relative(cwd, firstIndex);
@@ -146,6 +195,7 @@ Using:
   canonicalBase: ${cfg.site.canonicalBase}
   routePath:     ${routePath}
   output file:   ${outputFile}
+  pages in output: ${indexFiles.length} (showing first; use --all --check to validate all)
 
 Smoke tests:
 
@@ -160,20 +210,158 @@ Smoke tests:
 
 Expected: x-rendershield: bot-hit (proves Worker served prerender to bot).
 If debugHeaders enabled: X-Bot-Detected, X-Prerender, X-Final-Path.
+
+Tip: rendershield verify --check validates built HTML without fetching production.
 `);
 
   return {
     mode: "local",
     canonicalBase: cfg.site.canonicalBase,
-    routePath,
-    outputFile,
-    url,
+    checked: false,
+    ok: true,
+    pages: [{ routePath, outputFile, url }],
   };
 }
 
-async function runVerifyProd(url: string): Promise<VerifyProdResult> {
-  const normalizedUrl = url.startsWith("http") ? url : `https://${url}`;
+async function runLocalCheckOne(
+  cwd: string,
+  cfg: Awaited<ReturnType<typeof loadConfig>>,
+  outDirAbs: string,
+  indexPath: string
+): Promise<VerifyLocalResult> {
+  const page = await checkLocalPage(cwd, outDirAbs, indexPath, cfg.site.canonicalBase);
+  const ok = page.contract?.ok ?? false;
 
+  console.log(`
+RenderShield verify --check
+Route: ${page.routePath}
+File:  ${page.outputFile}
+Contract: ${ok ? "PASS" : "FAIL"}
+${!ok && page.contract ? page.contract.missing.map((m) => `  - ${m}`).join("\n") : ""}
+`);
+
+  if (!ok) {
+    throw renderShieldError(
+      "VERIFY_FAILED",
+      `Built HTML failed contract for ${page.routePath}. Missing: ${page.contract?.missing.join("; ")}`,
+      { routePath: page.routePath, missing: page.contract?.missing }
+    );
+  }
+
+  return {
+    mode: "local",
+    canonicalBase: cfg.site.canonicalBase,
+    checked: true,
+    ok: true,
+    pages: [page],
+  };
+}
+
+async function runLocalCheckAll(
+  cwd: string,
+  cfg: Awaited<ReturnType<typeof loadConfig>>,
+  outDirAbs: string,
+  indexFiles: string[]
+): Promise<VerifyLocalResult> {
+  const pages: VerifyPageResult[] = [];
+  const failures: string[] = [];
+
+  for (const indexPath of indexFiles) {
+    const page = await checkLocalPage(cwd, outDirAbs, indexPath, cfg.site.canonicalBase);
+    pages.push(page);
+    if (!page.contract?.ok) {
+      failures.push(
+        `${page.routePath}: ${page.contract?.missing.join("; ") ?? "contract failed"}`
+      );
+    }
+  }
+
+  console.log(`
+RenderShield verify --all --check
+Pages: ${pages.length}
+${pages
+  .map((p) => `  ${p.contract?.ok ? "PASS" : "FAIL"}  ${p.routePath}`)
+  .join("\n")}
+`);
+
+  if (failures.length > 0) {
+    throw renderShieldError(
+      "VERIFY_FAILED",
+      `Built HTML failed contract on ${failures.length} page(s). ${failures.join(" | ")}`,
+      { failures }
+    );
+  }
+
+  return {
+    mode: "local",
+    canonicalBase: cfg.site.canonicalBase,
+    checked: true,
+    ok: true,
+    pages,
+  };
+}
+
+async function checkLocalPage(
+  cwd: string,
+  outDirAbs: string,
+  indexPath: string,
+  canonicalBase: string
+): Promise<VerifyPageResult> {
+  const html = await fs.readFile(indexPath, "utf8");
+  const routePath = indexHtmlPathToRoute(outDirAbs, indexPath);
+  const outputFile = path.relative(cwd, indexPath);
+  const contract = checkPrerenderContract(html, {
+    routePath,
+    outFile: outputFile,
+  });
+  return {
+    routePath,
+    outputFile,
+    url: joinUrl(canonicalBase, routePath),
+    contract,
+  };
+}
+
+async function runVerifyProdAll(
+  cfg: Awaited<ReturnType<typeof loadConfig>>,
+  _cwd: string,
+  outDirAbs: string,
+  indexFiles: string[]
+): Promise<VerifyProdResult> {
+  const pages: VerifyProdResult["pages"] = [];
+  const failures: string[] = [];
+
+  for (const indexPath of indexFiles) {
+    const routePath = indexHtmlPathToRoute(outDirAbs, indexPath);
+    const prodUrl = joinUrl(cfg.site.canonicalBase, routePath);
+    try {
+      const result = await fetchAndVerifyProd(prodUrl);
+      pages.push(result);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      failures.push(`${routePath}: ${msg}`);
+    }
+  }
+
+  console.log(`
+RenderShield verify --prod --all
+Checked ${pages.length} URL(s) from build output.
+`);
+
+  if (failures.length > 0) {
+    throw renderShieldError(
+      "VERIFY_FAILED",
+      `Production verify failed for ${failures.length} route(s). ${failures.join(" | ")}`,
+      { failures }
+    );
+  }
+
+  return { mode: "prod", ok: true, pages };
+}
+
+async function fetchAndVerifyProd(
+  normalizedUrl: string
+): Promise<{ url: string; contract: ContractCheckResult }> {
   let botHtml: string;
   let humanHtml: string;
   let botStatus: number;
@@ -206,24 +394,22 @@ async function runVerifyProd(url: string): Promise<VerifyProdResult> {
     );
   }
 
-  // Prove routing: Worker must set x-rendershield: bot-hit for bot requests. No inference.
-  const routingOk = xRenderShield === "bot-hit";
   if (xRenderShield === "bot-fallback") {
     throw renderShieldError(
       "VERIFY_FAILED",
-      `verify --prod: bot request received x-rendershield: bot-fallback. ` +
-        `Prerender origin returned non-200; Worker fell back to SPA. Fix deployment or origin so bots get prerendered HTML.`,
+      `verify --prod: bot request received x-rendershield: bot-fallback for ${normalizedUrl}. ` +
+        `Prerender origin returned non-200; Worker fell back to SPA.`,
       { url: normalizedUrl, xRenderShield }
     );
   }
-  if (!routingOk) {
+  if (xRenderShield !== "bot-hit") {
     const hint = xRenderShield == null
-      ? " If no Worker is deployed, use verify without --prod to check local/build output."
+      ? " If no Worker is deployed, use verify --check for local/build output."
       : "";
     throw renderShieldError(
       "VERIFY_FAILED",
-      `verify --prod: expected x-rendershield: bot-hit (proving Worker routed bot to prerender). ` +
-        `Got: ${xRenderShield ?? "(missing)"}. Ensure the Worker is deployed and bound to this route.${hint}`,
+      `verify --prod: expected x-rendershield: bot-hit for ${normalizedUrl}. ` +
+        `Got: ${xRenderShield ?? "(missing)"}.${hint}`,
       { url: normalizedUrl, xRenderShield }
     );
   }
@@ -235,32 +421,31 @@ async function runVerifyProd(url: string): Promise<VerifyProdResult> {
 
   const humanSpa = looksLikeSpaShell(humanHtml);
 
-  // Report
   console.log(`
 RenderShield verify --prod
 URL: ${normalizedUrl}
 
 Fetch:
-  Bot (Googlebot):   ${botStatus}  (${botHtml.length} bytes)  x-rendershield: ${xRenderShield ?? "(none)"}
+  Bot (Googlebot):   ${botStatus}  (${botHtml.length} bytes)  x-rendershield: ${xRenderShield}
   Human (Chrome):    ${humanStatus}  (${humanHtml.length} bytes)
 
-Routing:  x-rendershield: bot-hit (Worker served prerendered HTML to bot)
+Routing:  x-rendershield: bot-hit
 
-Bot contract (title, meta, canonical, OG, JSON-LD, article):
-  ${contract.ok ? "PASS — all required fields present." : "FAIL — missing or invalid:"}
+Bot contract:
+  ${contract.ok ? "PASS" : "FAIL"}
 ${contract.missing.length > 0 ? contract.missing.map((m) => `  - ${m}`).join("\n") : ""}
 
 Human response:
-  ${humanSpa.likely ? `Likely SPA shell: ${humanSpa.reason ?? "unknown"}` : "Has substantial content (not a minimal SPA shell)."}
+  ${humanSpa.likely ? `Likely SPA shell: ${humanSpa.reason ?? "unknown"}` : "Has substantial content."}
 `);
 
   if (!contract.ok) {
     throw renderShieldError(
       "VERIFY_FAILED",
-      `Production URL did not satisfy bot contract. Missing: ${contract.missing.join("; ")}`,
+      `Production URL did not satisfy bot contract: ${normalizedUrl}. Missing: ${contract.missing.join("; ")}`,
       { url: normalizedUrl, missing: contract.missing }
     );
   }
 
-  return { mode: "prod", url: normalizedUrl, contract };
+  return { url: normalizedUrl, contract };
 }

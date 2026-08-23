@@ -33,7 +33,7 @@
     },
     "worker": {
       "enabled": true,
-      "lovableOrigin": "https://YOUR_SITE.lovable.app",
+      "spaOrigin": "https://app.example.com",
       "rewriteRouteBases": ["/blog/"],
       "botUserAgentPatterns": [
         "googlebot",

@@ -4,6 +4,7 @@ import { cmdInit } from "./commands/init.js";
 import { cmdBuild } from "./commands/build.js";
 import { cmdVerify } from "./commands/verify.js";
 import { formatCliError, renderShieldError } from "./errors.js";
+import { extractGlobalOptions, parseVerifyArgs } from "./cliArgs.js";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../package.json") as { version?: string };
@@ -14,24 +15,33 @@ function printHelp() {
 RenderShield v${VERSION} — boring bot-aware prerendering.
 
 Usage:
-  rendershield init
-  rendershield build
-  rendershield verify [--prod <url>]
+  rendershield [--config <path>] init
+  rendershield [--config <path>] build
+  rendershield [--config <path>] verify [options]
 
-  verify         Print curl commands for local/build output.
-  verify --prod  Fetch URL as bot and human; verify bot sees full HTML and contract fields.
-                 Requires x-rendershield: bot-hit from the Worker.
+Global:
+  --config <path>   Config file (default: rendershield.config.json)
+
+Verify:
+  verify              Print curl smoke-test commands for first built page
+  verify --check      Validate built HTML contract (first page)
+  verify --all --check   Validate contract for every built page
+  verify --prod <url> Fetch URL as bot; require x-rendershield: bot-hit + contract
+  verify --prod --all Check every route from build output in production
 
 Notes:
-  - Config file: rendershield.config.json
   - Content: content/<collection>/**/*.md (frontmatter required)
-  - Output: dist-prerender/
+  - Output: dist-prerender/ (see config)
+  - Config reference: docs/CONFIG.md
 `);
 }
 
 async function main() {
-  const args = process.argv.slice(2);
-  const cmd = args[0]?.trim();
+  const { options: globalOptions, rest } = extractGlobalOptions(
+    process.argv.slice(2)
+  );
+  const cmd = rest[0]?.trim();
+  const cmdArgs = rest.slice(1);
 
   if (!cmd || cmd === "-h" || cmd === "--help") {
     printHelp();
@@ -44,32 +54,32 @@ async function main() {
 
   try {
     if (cmd === "init") {
-      await cmdInit();
+      await cmdInit(undefined, globalOptions);
       return;
     }
     if (cmd === "build") {
-      await cmdBuild();
+      await cmdBuild(undefined, globalOptions);
       return;
     }
     if (cmd === "verify") {
-      const verifyArgs = args.slice(1);
-      if (verifyArgs.includes("-h") || verifyArgs.includes("--help")) {
+      if (cmdArgs.includes("-h") || cmdArgs.includes("--help")) {
         printHelp();
         process.exit(0);
       }
-      const prodIdx = verifyArgs.indexOf("--prod");
-      if (prodIdx >= 0) {
-        const prodUrl = verifyArgs[prodIdx + 1]?.trim();
-        if (!prodUrl || prodUrl.startsWith("-")) {
-          throw renderShieldError(
-            "CLI_INVALID_ARGS",
-            "verify --prod requires a URL. Example: rendershield verify --prod https://example.com/blog/hello-world"
-          );
-        }
-        await cmdVerify(undefined, { prodUrl });
-        return;
+      const verifyOptions = parseVerifyArgs(cmdArgs, globalOptions);
+      if (verifyOptions.prod && !verifyOptions.prodUrl && !verifyOptions.all) {
+        throw renderShieldError(
+          "CLI_INVALID_ARGS",
+          "verify --prod requires a URL, or use --prod --all. Example: rendershield verify --prod https://example.com/blog/hello-world"
+        );
       }
-      await cmdVerify();
+      if (verifyOptions.all && !verifyOptions.check && !verifyOptions.prod) {
+        throw renderShieldError(
+          "CLI_INVALID_ARGS",
+          "verify --all requires --check (local) or --prod (production). Example: rendershield verify --all --check"
+        );
+      }
+      await cmdVerify(undefined, verifyOptions);
       return;
     }
 

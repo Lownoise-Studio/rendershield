@@ -34,7 +34,7 @@ const baseConfig: RenderShieldConfig = {
   robots: { enabled: false, path: "/robots.txt" },
   worker: {
     enabled: false,
-    lovableOrigin: "",
+    spaOrigin: "",
     rewriteRouteBases: [],
     botUserAgentPatterns: [],
     debugHeaders: false,

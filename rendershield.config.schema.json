@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Lownoise-Studio/rendershield/rendershield.config.schema.json",
+  "title": "RenderShield config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "site", "content", "output"],
+  "properties": {
+    "version": { "const": 1 },
+    "site": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonicalBase", "siteName", "defaultOgImage", "authorName"],
+      "properties": {
+        "canonicalBase": { "type": "string", "format": "uri" },
+        "siteName": { "type": "string", "minLength": 1 },
+        "defaultOgImage": { "type": "string", "minLength": 1 },
+        "authorName": { "type": "string", "minLength": 1 }
+      }
+    },
+    "content": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["markdown"],
+      "properties": {
+        "markdown": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["baseDir", "collections"],
+          "properties": {
+            "baseDir": { "type": "string", "minLength": 1 },
+            "collections": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "pattern", "routeBase"],
+                "properties": {
+                  "name": { "type": "string", "minLength": 1 },
+                  "pattern": { "type": "string", "minLength": 1 },
+                  "routeBase": { "type": "string", "minLength": 1 },
+                  "schemaType": {
+                    "type": "string",
+                    "enum": ["Article", "BlogPosting", "WebPage"],
+                    "default": "Article"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outDir"],
+      "properties": {
+        "outDir": { "type": "string", "minLength": 1 },
+        "prettyHtml": { "type": "boolean", "default": true }
+      }
+    },
+    "sitemap": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "path": { "type": "string", "pattern": "^/" }
+      }
+    },
+    "robots": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "path": { "type": "string", "pattern": "^/" }
+      }
+    },
+    "worker": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "spaOrigin": { "type": "string", "format": "uri" },
+        "lovableOrigin": {
+          "type": "string",
+          "format": "uri",
+          "description": "Deprecated alias for spaOrigin."
+        },
+        "rewriteRouteBases": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "botUserAgentPatterns": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "debugHeaders": { "type": "boolean" }
+      }
+    }
+  }
+}

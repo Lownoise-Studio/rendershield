@@ -72,9 +72,20 @@ This is enough article body content to satisfy the prerender contract when built
     const result = await cmdVerify(tmpDir);
     expect(result.mode).toBe("local");
     if (result.mode === "local") {
-      expect(result.routePath).toBe("/blog/test-post");
-      expect(result.url).toBe("https://example.com/blog/test-post");
-      expect(result.outputFile).toMatch(/blog[\\/]test-post[\\/]index\.html$/);
+      expect(result.pages[0].routePath).toBe("/blog/test-post");
+      expect(result.pages[0].url).toBe("https://example.com/blog/test-post");
+      expect(result.pages[0].outputFile).toMatch(/blog[\\/]test-post[\\/]index\.html$/);
+    }
+  });
+
+  it("passes --check on built output", async () => {
+    await cmdBuild(tmpDir);
+    const result = await cmdVerify(tmpDir, { check: true });
+    expect(result.mode).toBe("local");
+    if (result.mode === "local") {
+      expect(result.checked).toBe(true);
+      expect(result.ok).toBe(true);
+      expect(result.pages[0].contract?.ok).toBe(true);
     }
   });
 });

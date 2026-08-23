@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-23
+
+### Added
+
+- `verify --check` and `verify --all --check`: validate built HTML locally against the bot contract (no network).
+- `verify --prod --all`: production-check every route discovered from build output.
+- Global `--config <path>` for `init`, `build`, and `verify`.
+- `worker.spaOrigin` (replaces `lovableOrigin`; old name still accepted on read).
+- Config reference ([docs/CONFIG.md](docs/CONFIG.md)) and `rendershield.config.schema.json`.
+
+### Changed
+
+- `VerifyLocalResult` / `VerifyProdResult` return a `pages` array (multi-route aware).
+- `init` default Worker origin field is `spaOrigin`.
+
 ## [1.0.0] - 2026-08-23
 
 ### Added

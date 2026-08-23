@@ -111,7 +111,7 @@ describe("loadConfig", () => {
     await expect(loadConfig(tmpDir)).rejects.toThrow(/canonicalBase/);
   });
 
-  it("throws when worker.enabled is true but lovableOrigin is missing", async () => {
+  it("throws when worker.enabled is true but spaOrigin is missing", async () => {
     await writeConfig({
       ...fullConfigWithWorker,
       worker: {
@@ -120,10 +120,16 @@ describe("loadConfig", () => {
         botUserAgentPatterns: ["googlebot"],
       },
     });
-    await expect(loadConfig(tmpDir)).rejects.toThrow(/lovableOrigin/);
+    await expect(loadConfig(tmpDir)).rejects.toThrow(/spaOrigin/);
   });
 
-  it("throws when worker.enabled is true but lovableOrigin is invalid URL", async () => {
+  it("accepts deprecated lovableOrigin as spaOrigin alias", async () => {
+    await writeConfig(fullConfigWithWorker);
+    const cfg = await loadConfig(tmpDir);
+    expect(cfg.worker.spaOrigin).toBe("https://origin.example.com");
+  });
+
+  it("throws when worker.enabled is true but spaOrigin is invalid URL", async () => {
     await writeConfig({
       ...fullConfigWithWorker,
       worker: {
@@ -149,7 +155,7 @@ describe("loadConfig", () => {
     await writeConfig(fullConfigWithWorker);
     const cfg = await loadConfig(tmpDir);
     expect(cfg.worker.enabled).toBe(true);
-    expect(cfg.worker.lovableOrigin).toBe("https://origin.example.com");
+    expect(cfg.worker.spaOrigin).toBe("https://origin.example.com");
     expect(cfg.worker.rewriteRouteBases).toEqual(["/blog/"]);
     expect(cfg.worker.botUserAgentPatterns).toEqual(["googlebot", "bingbot"]);
   });

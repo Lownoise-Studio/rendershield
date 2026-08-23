@@ -58,7 +58,7 @@ export default {
         return out;
       }
 
-      const origin = ${JSON.stringify(cfg.worker.lovableOrigin)};
+      const origin = ${JSON.stringify(cfg.worker.spaOrigin)};
       const finalPath = toIndexHtml(url.pathname);
       const originUrl = origin + finalPath + url.search;
 
