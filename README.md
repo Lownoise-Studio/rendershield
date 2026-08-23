@@ -12,7 +12,7 @@ No browser rendering.
 No guessing what bots see.
 
 If a page builds, the HTML contract is satisfied.
-If verify --prod passes, crawlers are actually receiving it.
+If `verify --prod` passes for a URL, that URL is receiving prerendered HTML to bots in production.
 
 ---
 
@@ -50,9 +50,9 @@ RenderShield enforces two guarantees:
   - optional Cloudflare Worker
 - Validates output:
   - missing title, metadata, or article body causes the build to fail
-- Verifies production behavior:
-  - `verify --prod` asserts `x-rendershield: bot-hit`
-  - fails if the Worker is missing or falling back
+- Verifies behavior:
+  - `verify` (local) — prints curl smoke-test commands for built output; fails if output is missing (does not fetch URLs or validate HTML)
+  - `verify --prod <url>` — fetches production as Googlebot, asserts `x-rendershield: bot-hit`, and validates the HTML contract; fails if the Worker is missing or falling back
 
 ---
 
@@ -103,18 +103,19 @@ Add a script to `package.json` if you prefer:
 git clone https://github.com/Lownoise-Studio/rendershield.git
 cd rendershield
 npm install
+npm run build
 ```
 
 **Initialize**
 
 ```bash
-npm run start -- init
+npx rendershield init
 ```
 
-Or after `npm run build`:
+Or:
 
 ```bash
-rendershield init
+npm run start -- init
 ```
 
 **Add content**
@@ -147,18 +148,24 @@ dist-prerender/
 rendershield verify
 ```
 
+Prints curl commands for a built page (from `dist-prerender/`). Use this after `build` to get smoke-test commands for your Worker setup. Exits with code 1 if output is missing; it does **not** fetch URLs or validate HTML.
+
 **Production verify (after deploying Worker)**
 
+Pass a **prerendered route URL** (not just the domain root):
+
 ```bash
-rendershield verify --prod https://your-domain.com
+rendershield verify --prod https://your-domain.com/blog/hello-world
 ```
 
 This command:
 
-- Fetches as Googlebot
-- Requires `x-rendershield: bot-hit`
-- Validates metadata + JSON-LD + article content
+- Fetches the URL as Googlebot (and as a human browser for comparison)
+- Requires `x-rendershield: bot-hit` on the bot response
+- Validates metadata + JSON-LD + article content on the bot response
 - Exits with code 1 if anything fails
+
+Proves routing for **that URL** only. Repeat for other routes you care about.
 
 ---
 
@@ -172,7 +179,7 @@ import { cmdBuild, loadConfig, checkPrerenderContract, RenderShieldError } from 
 await cmdBuild(process.cwd());
 ```
 
-Exported commands, config loaders, HTML renderer, contract validators, and artifact generators are available from the package root. Errors throw `RenderShieldError` with stable `code` values for CI and tooling.
+Exported commands, config loaders, HTML renderer, contract validators, and artifact generators are available from the package root. Errors throw `RenderShieldError` with stable `code` values for CI and tooling. ESM `import` only (no CommonJS `require`).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup.
 
@@ -182,9 +189,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup.
 
 Designed for Cloudflare Workers.
 
-The generated Worker:
+The generated Worker (enabled by default in `init`; set `worker.enabled: false` to skip):
 
-- Rewrites bot requests
+- Rewrites bot requests on configured route bases (e.g. `/blog/`)
 - Sets `x-rendershield` on all responses
 - Makes routing observable and testable
 
