@@ -1,4 +1,4 @@
-import { DEFAULT_CONFIG_NAME } from "../configPath.js";
+import { DEFAULT_CONFIG_NAME, resolveConfigFile } from "../configPath.js";
 import { DoctorCollector } from "./collector.js";
 import {
   DOCTOR_PHASE_ORDER,
@@ -26,11 +26,14 @@ export async function runDoctorEngine(
   const strict = options.strict ?? false;
   const skipOutput = options.skipOutput ?? false;
   const configPath = options.configPath ?? DEFAULT_CONFIG_NAME;
+  const configFile = resolveConfigFile(cwd, configPath);
 
   const collector = new DoctorCollector();
   const ctx: DoctorPhaseContext = {
     cwd,
     options: { strict, skipOutput, configPath },
+    configFile,
+    docs: [],
   };
 
   for (const phaseId of DOCTOR_PHASE_ORDER) {
