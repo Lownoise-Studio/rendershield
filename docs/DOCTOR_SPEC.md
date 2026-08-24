@@ -2,7 +2,7 @@
 
 > **Status: In progress — CLI not yet shipped**  
 > RenderShield Prerender does **not** expose `rendershield doctor` in the CLI or public API yet.  
-> **S1–S3** are **complete**. S4–S6 remain.
+> **S1–S4** are **complete**. S5–S6 remain.
 
 **Target package:** `@lownoise-studio/rendershield` (RenderShield Prerender)  
 **Scope (v1):** Offline diagnostics only  
@@ -125,7 +125,7 @@ S2 delivers the **pure engine** only — not the CLI command.
 | Phases | `src/doctor/phases.ts` | `DOCTOR_PHASE_ORDER`, stub runners (filled in S3/S4) |
 | Engine | `src/doctor/engine.ts` | `runDoctorEngine()` — structured result, **no stdout/stderr** |
 
-Phase runners for phases **1–5** are implemented (S3). Phases **6–10** remain no-op stubs until S4.
+Phase runners for phases **1–5** are implemented (S3). Phases **6–10** are implemented (S4).
 
 ---
 
@@ -252,7 +252,7 @@ rendershield verify --prod <url>
 | **S1** | Shared Markdown primitives (`discoverCollectionFiles`, `parseMarkdownFile`, `buildRoutePath`); refactor `loadAllMarkdownDocs`; parity tests | **Complete** |
 | **S2** | Internal Doctor types, collector, phase runner, and `runDoctorEngine()` (no CLI, no filesystem diagnostics, no public exports) | **Complete** |
 | **S3** | Config/content diagnostic phases 1–5 | **Complete** |
-| **S4** | Output diagnostic phases 6–10 | Not started |
+| **S4** | Output diagnostic phases 6–10 | **Complete** |
 | **S5** | `cmdDoctor`, CLI parsing/dispatch, human + `--json` formatters, public types | Not started |
 | **S6** | Read-only proof (hash tree snapshot), packaging/public-API tests, user documentation | Not started |
 
@@ -305,4 +305,4 @@ rendershield verify --prod <url>
 
 ## 17. Verdict
 
-**READY_TO_IMPLEMENT S4+** — S1–S3 prerequisites are complete. Next: output diagnostic phases (S4), then CLI and public API (S5), then read-only proof and user docs (S6).
+**READY_TO_IMPLEMENT S5+** — S1–S4 prerequisites are complete. Next: CLI and public API (S5), then read-only proof and user docs (S6).

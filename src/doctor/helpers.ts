@@ -8,6 +8,12 @@ export function asRenderShieldError(err: unknown) {
   return isRenderShieldError(err) ? err : null;
 }
 
+export function joinUrl(base: string, pathname: string): string {
+  const b = base.endsWith("/") ? base.slice(0, -1) : base;
+  const p = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  return b + p;
+}
+
 /** True when value is an absolute URL or site-relative path (/...). */
 export function isAbsoluteOrSiteRelativePath(value: string): boolean {
   if (value.startsWith("/")) return true;

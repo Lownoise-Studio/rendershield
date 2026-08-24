@@ -8,6 +8,13 @@ import {
   runOutputPathPhase,
   runSiteOriginWorkerPhase,
 } from "./runners/s3Phases.js";
+import {
+  runContractPhase,
+  runFreshnessPhase,
+  runOutputPresencePhase,
+  runSitemapRobotsPhase,
+  runWorkerPhase,
+} from "./runners/s4Phases.js";
 
 export type { DoctorPhaseContext } from "./context.js";
 
@@ -30,20 +37,18 @@ export const DOCTOR_PHASE_ORDER: readonly DoctorPhaseId[] = [
   "worker",
 ] as const;
 
-const noopPhase: DoctorPhaseRunner = () => {};
-
-/** Phase runners: S3 implements phases 1–5; S4 will replace output-phase stubs. */
+/** Phase runners: S3 implements phases 1–5; S4 implements phases 6–10. */
 export const DOCTOR_PHASE_RUNNERS: Record<DoctorPhaseId, DoctorPhaseRunner> = {
   config: runConfigPhase,
   outputPath: runOutputPathPhase,
   contentInventory: runContentInventoryPhase,
   contentSemantics: runContentSemanticsPhase,
   siteOriginWorker: runSiteOriginWorkerPhase,
-  outputPresence: noopPhase,
-  freshness: noopPhase,
-  contract: noopPhase,
-  sitemapRobots: noopPhase,
-  worker: noopPhase,
+  outputPresence: runOutputPresencePhase,
+  freshness: runFreshnessPhase,
+  contract: runContractPhase,
+  sitemapRobots: runSitemapRobotsPhase,
+  worker: runWorkerPhase,
 };
 
 export function isOutputPhase(phaseId: DoctorPhaseId): boolean {

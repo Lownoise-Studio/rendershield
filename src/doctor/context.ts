@@ -12,4 +12,6 @@ export type DoctorPhaseContext = {
   config?: RenderShieldConfig;
   /** Parsed markdown docs accumulated by content inventory phase. */
   docs: MarkdownDoc[];
+  /** Absolute output directory when safe to inspect; set by output presence phase. */
+  outDirAbs?: string;
 };
