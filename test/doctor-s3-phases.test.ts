@@ -123,6 +123,24 @@ describe("Doctor S3 config/content phases", () => {
     expect(phaseIds).not.toContain("outputPath");
   });
 
+  it("reports DOCTOR_CONFIG_INVALID for non-string output.outDir", async () => {
+    await writeConfig({
+      ...minimalValid,
+      output: { outDir: 1, prettyHtml: true },
+    });
+
+    const result = await runDoctorEngine({ cwd: tmpDir });
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "DOCTOR_CONFIG_INVALID",
+        phaseId: "config",
+        message: "output.outDir must be a non-empty string",
+      })
+    );
+    expect(result.diagnostics.some((d) => d.phaseId === "outputPath")).toBe(false);
+  });
+
   it("reports safe and unsafe output paths without modifying them", async () => {
     await writeConfig({ ...minimalValid, output: { outDir: "dist-prerender", prettyHtml: true } });
     await fs.ensureDir(path.join(tmpDir, "content", "blog"));

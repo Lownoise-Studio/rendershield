@@ -195,6 +195,12 @@ export async function loadConfig(
   if (!parsed?.output?.outDir) {
     throw renderShieldError("CONFIG_INVALID", "output.outDir is required");
   }
+  if (typeof parsed.output.outDir !== "string" || parsed.output.outDir.trim() === "") {
+    throw renderShieldError(
+      "CONFIG_INVALID",
+      "output.outDir must be a non-empty string"
+    );
+  }
 
   parsed.content.markdown.collections = normalizeCollections(
     parsed.content.markdown.collections

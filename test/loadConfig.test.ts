@@ -174,6 +174,17 @@ describe("loadConfig", () => {
     expect(cfg.content.markdown.collections[0].schemaType).toBe("Article");
   });
 
+  it("rejects non-string output.outDir", async () => {
+    await writeConfig({
+      ...structuredClone(minimalValid),
+      output: { outDir: 1, prettyHtml: true },
+    });
+    await expect(loadConfig(tmpDir)).rejects.toMatchObject({
+      code: "CONFIG_INVALID",
+      message: "output.outDir must be a non-empty string",
+    });
+  });
+
   it("rejects invalid collection schemaType", async () => {
     await writeConfig({
       ...structuredClone(minimalValid),
