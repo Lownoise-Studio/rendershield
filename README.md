@@ -178,7 +178,96 @@ This command:
 
 Proves routing for **that URL** only. Use `rendershield verify --prod --all` to check every route from build output.
 
-Config reference: [docs/CONFIG.md](docs/CONFIG.md) · JSON Schema: `rendershield.config.schema.json`
+**Local diagnostics (`doctor`)**
+
+`rendershield doctor` is an **offline, read-only** health check. It inspects your Prerender configuration, Markdown sources, and existing build output. It does **not** build, repair, or modify your project, and it does **not** perform network requests.
+
+```bash
+npx rendershield doctor
+npx rendershield doctor --json
+npx rendershield doctor --strict
+npx rendershield doctor --skip-output
+npx rendershield --config path/to/rendershield.config.json doctor
+```
+
+Doctor checks:
+
+- Configuration validity and coherence
+- Markdown inventory and frontmatter
+- Output path safety, presence, and best-effort freshness
+- Crawler HTML-contract validity on built pages
+- Sitemap, robots, and Worker artifact consistency
+
+| Flag | Behavior |
+|------|----------|
+| `--skip-output` | Run only checks that do not require built output (config and content phases) |
+| `--strict` | Treat warnings as failure (exit 1) |
+| `--json` | Emit the complete machine-readable result to **stdout** |
+
+Human-readable results also go to **stdout**. Invalid CLI arguments are reported on **stderr**.
+
+| Exit code | Meaning |
+|-----------|----------|
+| **0** | No failures (and no warnings when `--strict`) |
+| **1** | One or more diagnostic failures, or warnings with `--strict` |
+| **2** | Invalid Doctor arguments (`CLI_INVALID_ARGS`) |
+
+Example human output (abbreviated; a real run emits every diagnostic, not only the two shown here):
+
+```text
+RenderShield doctor v1.1.1
+
+Config: rendershield.config.json
+Output: (not built)
+
+  PASS   DOCTOR_CONFIG_FOUND               Configuration loaded
+  WARN   DOCTOR_OUTPUT_MISSING             Output directory "dist-prerender" not found
+
+Summary: 1 pass, 1 warn, 0 fail
+Doctor: OK
+```
+
+Example JSON shape (abbreviated; summary counts match only the diagnostics shown below — a real `--json` run includes the complete diagnostics array and matching summary):
+
+```json
+{
+  "version": "1.1.1",
+  "command": "doctor",
+  "ok": true,
+  "strict": false,
+  "skipOutput": false,
+  "configPath": "rendershield.config.json",
+  "summary": {
+    "pass": 1,
+    "warning": 1,
+    "fail": 0
+  },
+  "diagnostics": [
+    {
+      "phaseId": "config",
+      "code": "DOCTOR_CONFIG_FOUND",
+      "severity": "pass",
+      "category": "config",
+      "message": "Configuration loaded"
+    },
+    {
+      "phaseId": "outputPresence",
+      "code": "DOCTOR_OUTPUT_MISSING",
+      "severity": "warning",
+      "category": "output",
+      "message": "Output directory \"dist-prerender\" not found"
+    }
+  ]
+}
+```
+
+Production network verification remains a separate command:
+
+```bash
+npx rendershield verify --prod <url>
+```
+
+Config reference: [docs/CONFIG.md](docs/CONFIG.md) · JSON Schema: `rendershield.config.schema.json` · Doctor spec: [docs/DOCTOR_SPEC.md](docs/DOCTOR_SPEC.md)
 
 ---
 
@@ -187,12 +276,19 @@ Config reference: [docs/CONFIG.md](docs/CONFIG.md) · JSON Schema: `rendershield
 RenderShield Prerender can be used as a library through the existing package name:
 
 ```ts
-import { cmdBuild, loadConfig, checkPrerenderContract, RenderShieldError } from "@lownoise-studio/rendershield";
+import {
+  cmdBuild,
+  cmdDoctor,
+  loadConfig,
+  checkPrerenderContract,
+  RenderShieldError,
+} from "@lownoise-studio/rendershield";
 
 await cmdBuild(process.cwd());
+await cmdDoctor(process.cwd(), { json: true });
 ```
 
-Exported commands, config loaders, HTML renderer, contract validators, and artifact generators are available from the package root. Errors throw `RenderShieldError` with stable `code` values for CI and tooling. ESM `import` only (no CommonJS `require`).
+Exported commands, config loaders, HTML renderer, contract validators, artifact generators, and Doctor types are available from the package root. Errors throw `RenderShieldError` with stable `code` values for CI and tooling. ESM `import` only (no CommonJS `require`).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup.
 

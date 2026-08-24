@@ -35,6 +35,8 @@
     "prepack": "npm run build",
     "test": "vitest run",
     "pretest": "npm run build",
+    "test:doctor-readonly": "vitest run test/doctor-readonly-proof.test.ts",
+    "pretest:doctor-readonly": "npm run build",
     "test:packaging": "node scripts/packaging-smoke.mjs"
   },
   "files": [

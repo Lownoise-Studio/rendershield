@@ -1,8 +1,7 @@
 # DOCTOR_SPEC.md — `rendershield doctor`
 
-> **Status: CLI shipped (S5)**  
-> RenderShield Prerender exposes `rendershield doctor` in the CLI and public API.  
-> **S1–S5** are **complete**. S6 remains.
+> **Status: Doctor v1 implemented and verified (S1–S6 complete)**  
+> RenderShield Prerender exposes `rendershield doctor` in the CLI and public API.
 
 **Target package:** `@lownoise-studio/rendershield` (RenderShield Prerender)  
 **Scope (v1):** Offline diagnostics only  
@@ -11,10 +10,10 @@
 
 ## 1. Architecture fit
 
-`rendershield doctor` will be a **fourth CLI command** alongside `init`, `build`, and `verify`. v1 is **offline and read-only**: it inspects Prerender config, Markdown sources, and existing generated artifacts. It does **not** replace `verify --prod`.
+`rendershield doctor` is a **fourth CLI command** alongside `init`, `build`, and `verify`. v1 is **offline and read-only**: it inspects Prerender config, Markdown sources, and existing generated artifacts. It does **not** replace `verify --prod`.
 
-| Existing piece | How doctor will use it |
-|----------------|------------------------|
+| Existing piece | How doctor uses it |
+|----------------|---------------------|
 | `extractGlobalOptions()` + `--config` | Global config path |
 | `loadConfig()` | Config discovery and runtime validation |
 | Shared Markdown primitives in `src/core/markdownContent.ts` | Collection discovery, single-file parse, route construction — **shared with build** |
@@ -27,10 +26,9 @@
 
 - `src/core/markdownContent.ts` — shared Markdown primitives (S1)
 - `src/doctor/types.ts`, `collector.ts`, `phases.ts`, `engine.ts` — `runDoctorEngine()` (S2)
-
-**Planned insertion points (S6 only):**
-
-- Read-only hash-tree proof in CI and user-facing documentation
+- `src/doctor/runners/s3Phases.ts`, `s4Phases.ts` — diagnostic phases 1–10 (S3/S4)
+- `src/commands/doctor.ts`, `src/doctor/formatters.ts` — CLI command and formatters (S5)
+- `test/doctor-readonly-proof.test.ts` + CI job `doctor-readonly` — read-only proof (S6)
 
 ---
 
@@ -65,7 +63,7 @@ Provide a **single, offline, read-only health check** for a RenderShield Prerend
 
 ---
 
-## 3. CLI syntax and flags (planned)
+## 3. CLI syntax and flags
 
 ```
 rendershield [--config <path>] doctor [options]
@@ -93,7 +91,7 @@ Doctor **may read:** config, Markdown under `content.markdown.baseDir`, files un
 
 Doctor **must not:** write/delete files, invoke build/init, network fetch, spawn browsers, read Wrangler/provider config, import React.
 
-**Acceptance test (planned):** before/after file-tree snapshot with content hashes; any change fails.
+**Acceptance test (S6 — complete):** `test/doctor-readonly-proof.test.ts` invokes the compiled production CLI (`dist/cli.js`) against representative project fixtures. Before/after snapshots capture the project root (as `"."`) plus descendants: path names, entry kinds (file/directory/symlink), content hashes, sizes, modes, symlink targets, and mtimes (atime excluded). Any change fails, including transient root-level create/delete that would otherwise leave the child-entry set unchanged while updating root mtime. Scenarios include built output, pre-build missing output, invalid config, frontmatter failure, safe nested and double-dot-prefixed artifact paths, and in-project symlinks. CI job `doctor-readonly` runs this proof as a dedicated gate.
 
 ---
 
@@ -119,7 +117,7 @@ S2 delivers the **pure engine** only — not the CLI command.
 |-----------|--------|----------------|
 | Types | `src/doctor/types.ts` | `DoctorSeverity`, `DoctorPhaseId`, `DoctorDiagnostic`, `DoctorResult`, etc. |
 | Collector | `src/doctor/collector.ts` | PASS/WARNING/FAIL aggregation, strict `ok` semantics |
-| Phases | `src/doctor/phases.ts` | `DOCTOR_PHASE_ORDER`, stub runners (filled in S3/S4) |
+| Phases | `src/doctor/phases.ts` | `DOCTOR_PHASE_ORDER`, phase runners |
 | Engine | `src/doctor/engine.ts` | `runDoctorEngine()` — structured result, **no stdout/stderr** |
 
 Phase runners for phases **1–5** are implemented (S3). Phases **6–10** are implemented (S4).
@@ -212,13 +210,27 @@ Complete JSON results available in the **open-source CLI** — no hosted service
 
 ---
 
-## 11. Programmatic API (planned public surface — S5)
+## 11. Programmatic API (public surface — S5/S6)
 
-**Allowed new exports (S5):** `cmdDoctor`, Doctor types only.
+### Public (exported from `@lownoise-studio/rendershield`)
 
-**Internal today (S2, not exported from package root):** `runDoctorEngine`, `DoctorCollector`, phase runners.
+- `cmdDoctor`
+- `DoctorCommandOptions`
+- `DoctorSeverity`, `DoctorCategory`, `DoctorPhaseId`, `DoctorDiagnosticCode`
+- `DoctorDiagnosticDetails`, `DoctorDiagnostic`, `DoctorSummary`
+- `DoctorEngineOptions`, `DoctorResult`, `DoctorCliResult`
 
-**Not exported:** path-safety, route listing, Markdown primitives, freshness helpers.
+### Internal (not exported from package root)
+
+- `runDoctorEngine`
+- `DoctorCollector`
+- Phase runners (`runPhase*`)
+- Formatters (`formatDoctorHuman`, `formatDoctorJson`)
+- Doctor context objects
+- Artifact-path safety helpers (`validateArtifactPathFormat`, `resolveArtifactPathInOutDir`, `readArtifactPathConfig`)
+- Path-safety, route listing, Markdown primitives, freshness helpers
+
+Packaging smoke (`scripts/packaging-smoke.mjs`) verifies the public/internal boundary from an installed tarball consumer.
 
 ---
 
@@ -251,7 +263,9 @@ rendershield verify --prod <url>
 | **S3** | Config/content diagnostic phases 1–5 | **Complete** |
 | **S4** | Output diagnostic phases 6–10 | **Complete** |
 | **S5** | `cmdDoctor`, CLI parsing/dispatch, human + `--json` formatters, public types | **Complete** |
-| **S6** | Read-only proof (hash tree snapshot), packaging/public-API tests, user documentation | Not started |
+| **S6** | Read-only proof (tree snapshot), packaging/public-API tests, user documentation, CI gate | **Complete** |
+
+**Doctor v1:** Implemented and verified.
 
 **Note:** Earlier drafts described S2 as including `cmdDoctor`. That was split: S2 ships the internal engine only; S5 ships the CLI command and public API.
 
@@ -259,15 +273,15 @@ rendershield verify --prod <url>
 
 ## 14. Acceptance criteria (offline v1)
 
-1. After build, `doctor` exits 0 with no FAIL on valid fixture.
-2. Pre-build valid project exits 0 with WARN-only for missing output.
-3. Duplicate slug → FAIL, exit 1.
-4. Unknown flags → `CLI_INVALID_ARGS`, exit **2**.
-5. `--json` includes all FAIL/WARN; `version` from package metadata.
-6. Read-only: before/after file-tree + content hashes unchanged.
-7. Build and doctor share Markdown primitives. *(S1 complete)*
-8. Public API adds only `cmdDoctor` + Doctor types. *(S5)*
-9. No React imports; no network in v1.
+1. After build, `doctor` exits 0 with no FAIL on valid fixture. ✓
+2. Pre-build valid project exits 0 with WARN-only for missing output. ✓
+3. Duplicate slug → FAIL, exit 1. ✓
+4. Unknown flags → `CLI_INVALID_ARGS`, exit **2**. ✓
+5. `--json` includes all FAIL/WARN; `version` from package metadata. ✓
+6. Read-only: before/after file-tree snapshot unchanged (S6 proof). ✓
+7. Build and doctor share Markdown primitives. ✓
+8. Public API adds only `cmdDoctor` + Doctor types. ✓
+9. No React imports; no network in v1. ✓
 
 ---
 
@@ -302,4 +316,4 @@ rendershield verify --prod <url>
 
 ## 17. Verdict
 
-**READY_FOR_S6** — S1–S5 prerequisites are complete. Next: read-only proof and user docs (S6).
+**Doctor v1 complete** — S1–S6 are implemented, tested, documented, and verified in CI. Remaining release actions (version bump, npm publish, GitHub Release) are outside S6.

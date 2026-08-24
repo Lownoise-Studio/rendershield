@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Offline, read-only `rendershield doctor` with human and complete JSON output, `--strict` and `--skip-output` modes, public `cmdDoctor` and Doctor result/diagnostic types, and documented exit codes (`0`, `1`, `2`). No npm package or CLI identity change.
+
 ## [1.1.1] - 2026-08-24
 
 ### Security
