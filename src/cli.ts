@@ -3,8 +3,9 @@ import { createRequire } from "node:module";
 import { cmdInit } from "./commands/init.js";
 import { cmdBuild } from "./commands/build.js";
 import { cmdVerify } from "./commands/verify.js";
-import { formatCliError, renderShieldError } from "./errors.js";
-import { extractGlobalOptions, parseVerifyArgs } from "./cliArgs.js";
+import { cmdDoctor, printDoctorHelp } from "./commands/doctor.js";
+import { formatCliError, isRenderShieldError, renderShieldError } from "./errors.js";
+import { extractGlobalOptions, parseDoctorArgs, parseVerifyArgs } from "./cliArgs.js";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../package.json") as { version?: string };
@@ -17,10 +18,17 @@ RenderShield v${VERSION} — boring bot-aware prerendering.
 Usage:
   rendershield [--config <path>] init
   rendershield [--config <path>] build
+  rendershield [--config <path>] doctor [options]
   rendershield [--config <path>] verify [options]
 
 Global:
   --config <path>   Config file (default: rendershield.config.json)
+
+Doctor:
+  doctor              Offline read-only project health checks
+  doctor --json       Machine-readable JSON on stdout
+  doctor --strict     Treat WARNING as failure
+  doctor --skip-output   Skip checks requiring built output
 
 Verify:
   verify              Print curl smoke-test commands for first built page
@@ -61,6 +69,20 @@ async function main() {
       await cmdBuild(undefined, globalOptions);
       return;
     }
+    if (cmd === "doctor") {
+      if (cmdArgs.includes("-h") || cmdArgs.includes("--help")) {
+        printDoctorHelp(VERSION);
+        process.exit(0);
+      }
+      const doctorOptions = parseDoctorArgs(cmdArgs, globalOptions);
+      const doctorResult = await cmdDoctor(undefined, doctorOptions);
+      if (!doctorResult.ok) {
+        // Set exitCode and return so stdout (especially large --json) can drain.
+        process.exitCode = 1;
+        return;
+      }
+      return;
+    }
     if (cmd === "verify") {
       if (cmdArgs.includes("-h") || cmdArgs.includes("--help")) {
         printHelp();
@@ -89,6 +111,9 @@ async function main() {
   } catch (err: unknown) {
     const msg = formatCliError(err);
     console.error(`\nRenderShield error: ${msg}\n`);
+    if (isRenderShieldError(err) && err.code === "CLI_INVALID_ARGS") {
+      process.exit(2);
+    }
     process.exit(1);
   }
 }

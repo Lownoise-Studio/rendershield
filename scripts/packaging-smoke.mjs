@@ -112,7 +112,7 @@ function main() {
       `
 import * as rs from ${JSON.stringify(PKG_NAME)};
 
-const fns = ["cmdInit", "cmdBuild", "cmdVerify", "loadConfig", "checkPrerenderContract"];
+const fns = ["cmdInit", "cmdBuild", "cmdVerify", "cmdDoctor", "loadConfig", "checkPrerenderContract"];
 const bad = [];
 for (const k of fns) {
   if (typeof rs[k] !== "function") bad.push(k + " (expected function)");
@@ -141,22 +141,33 @@ console.log("import OK", Object.keys(rs).sort().join(","));
       `
 import {
   cmdBuild,
+  cmdDoctor,
   loadConfig,
   checkPrerenderContract,
   RenderShieldError,
   type RenderShieldConfig,
   type ContractCheckResult,
+  type DoctorCliResult,
+  type DoctorDiagnostic,
+  type DoctorCommandOptions,
 } from ${JSON.stringify(PKG_NAME)};
 
 declare const cfg: RenderShieldConfig;
 declare const contract: ContractCheckResult;
+declare const doctorResult: DoctorCliResult;
+declare const diagnostic: DoctorDiagnostic;
+declare const doctorOptions: DoctorCommandOptions;
 
 void cmdBuild;
+void cmdDoctor;
 void loadConfig;
 void checkPrerenderContract;
 void RenderShieldError;
 void cfg;
 void contract;
+void doctorResult;
+void diagnostic;
+void doctorOptions;
 `.trimStart()
     );
     const tsconfigPath = path.join(consumerDir, "tsconfig.json");

@@ -436,9 +436,9 @@ Body.
 });
 
 describe("Doctor S3 public API boundary", () => {
-  it("does not export doctor modules from package root", async () => {
+  it("exports cmdDoctor but not runDoctorEngine from package root", async () => {
     const api = await import("../dist/index.js");
+    expect(typeof api.cmdDoctor).toBe("function");
     expect(Object.keys(api)).not.toContain("runDoctorEngine");
-    expect(Object.keys(api)).not.toContain("cmdDoctor");
   });
 });
