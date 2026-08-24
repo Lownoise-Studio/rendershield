@@ -158,6 +158,16 @@ describe("loadConfig artifact path validation", () => {
     expect(cfg.robots.path).toBe(safePath);
   });
 
+  it.each([
+    ["sitemap.path", { sitemap: { enabled: true, path: "" }, robots: minimalValid.robots }],
+    ["sitemap.path", { sitemap: { enabled: true, path: "   " }, robots: minimalValid.robots }],
+    ["robots.path", { sitemap: minimalValid.sitemap, robots: { enabled: true, path: "" } }],
+    ["robots.path", { sitemap: minimalValid.sitemap, robots: { enabled: true, path: "   " } }],
+  ] as const)("rejects empty %s", async (_field, patch) => {
+    await writeConfig({ ...minimalValid, ...patch });
+    await expect(loadConfig(tmpDir)).rejects.toMatchObject({ code: "CONFIG_INVALID" });
+  });
+
   it("rejects artifact paths whose symlink parent resolves outside outDir", async () => {
     const outsideDir = path.join(tmpDir, "outside-target");
     const outDir = path.join(tmpDir, "dist-prerender");
@@ -281,9 +291,15 @@ describe("artifact path safety integration", () => {
     expect(relative).toBe(path.join("seo", "sitemap.xml"));
   });
 
-  it("readArtifactPathConfig defaults to safe paths", () => {
+  it("readArtifactPathConfig defaults only for undefined or null", () => {
     expect(readArtifactPathConfig(undefined, "/sitemap.xml", "sitemap.path")).toBe("/sitemap.xml");
     expect(readArtifactPathConfig(null, "/robots.txt", "robots.path")).toBe("/robots.txt");
+    expect(() => readArtifactPathConfig("", "/sitemap.xml", "sitemap.path")).toThrow(
+      expect.objectContaining({ code: "CONFIG_INVALID" })
+    );
+    expect(() => readArtifactPathConfig("   ", "/robots.txt", "robots.path")).toThrow(
+      expect.objectContaining({ code: "CONFIG_INVALID" })
+    );
   });
 });
 

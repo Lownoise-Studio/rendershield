@@ -194,7 +194,7 @@ export function readArtifactPathConfig(
   defaultPath: string,
   fieldName: string
 ): string {
-  if (value === undefined || value === null || value === "") {
+  if (value === undefined || value === null) {
     return validateArtifactPathFormat(defaultPath, fieldName);
   }
   if (typeof value !== "string") {
