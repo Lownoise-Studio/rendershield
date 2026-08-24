@@ -3,6 +3,19 @@ import path from "node:path";
 import { renderShieldError } from "../errors.js";
 
 /**
+ * True when path.relative() indicates the candidate is outside the base directory.
+ * Matches complete parent-segment traversal (`..` or `..${sep}...`), not names that
+ * merely begin with two dots (e.g. `..metadata`).
+ */
+function isOutsideBase(relativePath: string): boolean {
+  return (
+    relativePath === ".." ||
+    relativePath.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relativePath)
+  );
+}
+
+/**
  * Validates a site-relative artifact path from config (sitemap.path, robots.path).
  * Must be a URL-style path beneath output.outDir when resolved.
  */
@@ -47,10 +60,12 @@ export function validateArtifactPathFormat(
     );
   }
 
-  if (/^[a-zA-Z]:/.test(trimmed)) {
+  // After the leading slash: reject Windows drive-letter / drive-relative forms
+  // (e.g. /C:custom.xml). Checked on all platforms for portable config safety.
+  if (/^\/[a-zA-Z]:/.test(trimmed)) {
     throw renderShieldError(
       "CONFIG_INVALID",
-      `${fieldName} must not be a drive-letter path`
+      `${fieldName} must not contain a Windows drive-letter path`
     );
   }
 
@@ -89,6 +104,13 @@ export function validateArtifactPathFormat(
         `${fieldName} must not contain parent-directory (..) segments`
       );
     }
+    // Drive-relative segment after leading slash (e.g. /C:custom.xml → "C:custom.xml")
+    if (/^[a-zA-Z]:/.test(segment)) {
+      throw renderShieldError(
+        "CONFIG_INVALID",
+        `${fieldName} must not contain a Windows drive-letter path`
+      );
+    }
   }
 
   return trimmed;
@@ -112,7 +134,7 @@ function assertLexicallyInsideOutDir(
     );
   }
 
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+  if (isOutsideBase(relative)) {
     throw renderShieldError(
       "CONFIG_INVALID",
       `${fieldName} resolves outside output.outDir`,
@@ -152,7 +174,7 @@ async function assertSymlinkParentsStayInsideOutDir(
     if (await fs.pathExists(current)) {
       const currentReal = await resolveExistingPathRealpath(current);
       const relativeReal = path.relative(outDirReal, currentReal);
-      if (relativeReal.startsWith("..") || relativeReal === ".." || path.isAbsolute(relativeReal)) {
+      if (isOutsideBase(relativeReal)) {
         throw renderShieldError(
           "CONFIG_INVALID",
           `${fieldName} resolves outside output.outDir via symlink`,
@@ -165,7 +187,7 @@ async function assertSymlinkParentsStayInsideOutDir(
     const parent = path.dirname(current);
     if (parent === current) break;
     const parentRelative = path.relative(outDirNorm, parent);
-    if (parentRelative.startsWith("..") || path.isAbsolute(parentRelative)) break;
+    if (isOutsideBase(parentRelative)) break;
     current = parent;
   }
 }
