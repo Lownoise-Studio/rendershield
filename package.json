@@ -1,6 +1,6 @@
 {
   "name": "@lownoise-studio/rendershield",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "RenderShield Prerender: deterministic bot-aware prerendering with verifiable crawler delivery.",
   "type": "module",
   "license": "MIT",
@@ -61,7 +61,11 @@
     "fast-glob": "^3.3.2",
     "fs-extra": "^11.2.0",
     "gray-matter": "^4.0.3",
-    "markdown-it": "^14.1.0"
+    "markdown-it": "^14.2.0"
+  },
+  "overrides": {
+    "js-yaml": "3.15.1",
+    "picomatch": "2.3.2"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
