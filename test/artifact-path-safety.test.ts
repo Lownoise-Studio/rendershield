@@ -23,7 +23,28 @@ const REJECTED_PATHS = [
   "/",
 ];
 
-const ACCEPTED_PATHS = ["/sitemap.xml", "/robots.txt", "/seo/sitemap.xml", "/crawler/robots.txt"];
+const DRIVE_RELATIVE_PATHS = [
+  "/C:custom.xml",
+  "/D:folder/robots.txt",
+  "/c:seo/sitemap.xml",
+];
+
+const ACCEPTED_PATHS = [
+  "/sitemap.xml",
+  "/robots.txt",
+  "/seo/sitemap.xml",
+  "/crawler/robots.txt",
+  "/..metadata/sitemap.xml",
+  "/..well-known/robots.txt",
+];
+
+function isOutsideOutDir(relativePath: string): boolean {
+  return (
+    relativePath === ".." ||
+    relativePath.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relativePath)
+  );
+}
 
 const minimalValid = {
   version: 1,
@@ -101,6 +122,29 @@ describe("validateArtifactPathFormat", () => {
     expect(validateArtifactPathFormat(safePath, "sitemap.path")).toBe(safePath);
     expect(validateArtifactPathFormat(safePath, "robots.path")).toBe(safePath);
   });
+
+  it.each(DRIVE_RELATIVE_PATHS)("rejects drive-relative path %s", (unsafePath) => {
+    for (const field of ["sitemap.path", "robots.path"] as const) {
+      try {
+        validateArtifactPathFormat(unsafePath, field);
+        throw new Error("expected throw");
+      } catch (err) {
+        expect(err).toMatchObject({
+          code: "CONFIG_INVALID",
+          message: expect.stringMatching(/drive-letter/i),
+        });
+      }
+    }
+  });
+
+  it("accepts double-dot-prefixed directory names that are not parent traversal", () => {
+    expect(validateArtifactPathFormat("/..metadata/sitemap.xml", "sitemap.path")).toBe(
+      "/..metadata/sitemap.xml"
+    );
+    expect(validateArtifactPathFormat("/..well-known/robots.txt", "robots.path")).toBe(
+      "/..well-known/robots.txt"
+    );
+  });
 });
 
 describe("loadConfig artifact path validation", () => {
@@ -156,6 +200,39 @@ describe("loadConfig artifact path validation", () => {
     });
     const cfg = await loadConfig(tmpDir);
     expect(cfg.robots.path).toBe(safePath);
+  });
+
+  it.each(DRIVE_RELATIVE_PATHS)("rejects sitemap.path drive-relative %s", async (unsafePath) => {
+    await writeConfig({
+      ...minimalValid,
+      sitemap: { enabled: true, path: unsafePath },
+    });
+    await expect(loadConfig(tmpDir)).rejects.toMatchObject({
+      code: "CONFIG_INVALID",
+      message: expect.stringMatching(/drive-letter/i),
+    });
+  });
+
+  it.each(DRIVE_RELATIVE_PATHS)("rejects robots.path drive-relative %s", async (unsafePath) => {
+    await writeConfig({
+      ...minimalValid,
+      robots: { enabled: true, path: unsafePath },
+    });
+    await expect(loadConfig(tmpDir)).rejects.toMatchObject({
+      code: "CONFIG_INVALID",
+      message: expect.stringMatching(/drive-letter/i),
+    });
+  });
+
+  it("accepts double-dot-prefixed names that are not parent traversal", async () => {
+    await writeConfig({
+      ...minimalValid,
+      sitemap: { enabled: true, path: "/..metadata/sitemap.xml" },
+      robots: { enabled: true, path: "/..well-known/robots.txt" },
+    });
+    const cfg = await loadConfig(tmpDir);
+    expect(cfg.sitemap.path).toBe("/..metadata/sitemap.xml");
+    expect(cfg.robots.path).toBe("/..well-known/robots.txt");
   });
 
   it.each([
@@ -283,13 +360,60 @@ describe("artifact path safety integration", () => {
     );
   });
 
+  it("builds and doctors double-dot-prefixed artifact paths beneath outDir", async () => {
+    await writeConfig({
+      ...minimalValid,
+      sitemap: { enabled: true, path: "/..metadata/sitemap.xml" },
+      robots: { enabled: true, path: "/..well-known/robots.txt" },
+    });
+
+    await cmdBuild(tmpDir);
+
+    const sitemapAbs = path.join(tmpDir, "dist-prerender", "..metadata", "sitemap.xml");
+    const robotsAbs = path.join(tmpDir, "dist-prerender", "..well-known", "robots.txt");
+    const outDirAbs = path.join(tmpDir, "dist-prerender");
+
+    await expect(fs.pathExists(sitemapAbs)).resolves.toBe(true);
+    await expect(fs.pathExists(robotsAbs)).resolves.toBe(true);
+    expect(isOutsideOutDir(path.relative(outDirAbs, sitemapAbs))).toBe(false);
+    expect(isOutsideOutDir(path.relative(outDirAbs, robotsAbs))).toBe(false);
+    await expect(fs.readFile(sentinelPath, "utf8")).resolves.toBe("unchanged");
+    await expect(fs.pathExists(path.join(tmpDir, "outside.xml"))).resolves.toBe(false);
+
+    const before = await treeHash(tmpDir);
+    const result = await runDoctorEngine({ cwd: tmpDir });
+    const after = await treeHash(tmpDir);
+
+    expect(result.ok).toBe(true);
+    expect(result.diagnostics.some((d) => d.code === "DOCTOR_CONFIG_INVALID")).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "DOCTOR_SITEMAP_URL_SET",
+        severity: "pass",
+      })
+    );
+    expect(after).toEqual(before);
+  });
+
   it("resolveArtifactPathInOutDir keeps resolved targets inside outDir", async () => {
     const outDirAbs = path.join(tmpDir, "dist-prerender");
     const resolved = await resolveArtifactPathInOutDir(outDirAbs, "/seo/sitemap.xml", "sitemap.path");
     const relative = path.relative(outDirAbs, resolved);
-    expect(relative.startsWith("..")).toBe(false);
+    expect(isOutsideOutDir(relative)).toBe(false);
     expect(relative).toBe(path.join("seo", "sitemap.xml"));
   });
+
+  it.each(["/..metadata/sitemap.xml", "/..well-known/robots.txt"] as const)(
+    "resolveArtifactPathInOutDir accepts %s inside outDir",
+    async (safePath) => {
+      const outDirAbs = path.join(tmpDir, "dist-prerender");
+      const field = safePath.includes("robots") ? "robots.path" : "sitemap.path";
+      const resolved = await resolveArtifactPathInOutDir(outDirAbs, safePath, field);
+      const relative = path.relative(outDirAbs, resolved);
+      expect(isOutsideOutDir(relative)).toBe(false);
+      expect(path.basename(resolved)).toBe(path.basename(safePath));
+    }
+  );
 
   it("readArtifactPathConfig defaults only for undefined or null", () => {
     expect(readArtifactPathConfig(undefined, "/sitemap.xml", "sitemap.path")).toBe("/sitemap.xml");
