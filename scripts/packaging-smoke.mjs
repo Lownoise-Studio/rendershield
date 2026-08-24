@@ -169,7 +169,7 @@ void contract;
             module: "NodeNext",
             moduleResolution: "NodeNext",
             strict: true,
-            skipLibCheck: true,
+            skipLibCheck: false,
             noEmit: true,
           },
           include: ["consumer.ts"],
