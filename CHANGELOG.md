@@ -7,9 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-24
+
 ### Added
 
-- Offline, read-only `rendershield doctor` with human and complete JSON output, `--strict` and `--skip-output` modes, public `cmdDoctor` and Doctor result/diagnostic types, and documented exit codes (`0`, `1`, `2`). No npm package or CLI identity change.
+- Offline, read-only `rendershield doctor` command for local project health checks (no network, no build, no file modifications).
+- Human-readable stdout output and complete machine-readable `--json` output for the full Doctor result.
+- `--strict` (treat warnings as failure) and `--skip-output` (limit to checks that do not require built output).
+- Exit codes: `0` success / warn-only (non-strict), `1` diagnostic failure or strict warnings, `2` invalid Doctor arguments (`CLI_INVALID_ARGS`).
+- Public API: `cmdDoctor`, `DoctorCommandOptions`, and Doctor result/diagnostic types (`DoctorSeverity`, `DoctorCategory`, `DoctorPhaseId`, `DoctorDiagnosticCode`, `DoctorDiagnosticDetails`, `DoctorDiagnostic`, `DoctorSummary`, `DoctorEngineOptions`, `DoctorResult`, `DoctorCliResult`).
+- Diagnostics covering configuration, Markdown content/frontmatter, output presence, HTML contract, sitemap/robots artifacts, Worker output, and best-effort freshness warnings.
+- Dedicated CI read-only proof (`test:doctor-readonly` / `doctor-readonly` job) that snapshots the project root and descendants before/after real CLI Doctor invocations.
+
+### Fixed
+
+- Artifact-path safety hardening for sitemap/robots paths (traversal rejection, drive-relative rejection, safe nested and double-dot-prefixed paths such as `/..metadata/sitemap.xml`).
+
+### Compatibility
+
+- npm package remains `@lownoise-studio/rendershield`.
+- CLI bin remains `rendershield` → `dist/cli.js`.
+- Existing `init`, `build`, and `verify` commands and previously exported public API paths remain compatible.
+- Internal Doctor engine (`runDoctorEngine`) and artifact-path helpers are not exported.
 
 ## [1.1.1] - 2026-08-24
 

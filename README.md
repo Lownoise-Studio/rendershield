@@ -215,7 +215,7 @@ Human-readable results also go to **stdout**. Invalid CLI arguments are reported
 Example human output (abbreviated; a real run emits every diagnostic, not only the two shown here):
 
 ```text
-RenderShield doctor v1.1.1
+RenderShield doctor v1.2.0
 
 Config: rendershield.config.json
 Output: (not built)
@@ -231,7 +231,7 @@ Example JSON shape (abbreviated; summary counts match only the diagnostics shown
 
 ```json
 {
-  "version": "1.1.1",
+  "version": "1.2.0",
   "command": "doctor",
   "ok": true,
   "strict": false,
