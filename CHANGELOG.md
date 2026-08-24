@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-08-24
+
+### Security
+
+- Patched direct and transitive dependencies used by the build pipeline: `markdown-it` (typographer/smartquotes DoS), `linkify-it` (linkify/mailto DoS), `js-yaml` (YAML merge-key DoS via gray-matter frontmatter), and `picomatch` (glob matching via fast-glob).
+
+### Changed
+
+- Package metadata and docs now use the **RenderShield Prerender** product name in README and `package.json` description. The npm package remains `@lownoise-studio/rendershield`, the CLI remains `rendershield`, and the public API exports are unchanged.
+- `SECURITY.md`: only **1.1.x** is supported; versions below 1.1 are unsupported.
+
 ## [1.1.0] - 2026-08-23
 
 ### Added
