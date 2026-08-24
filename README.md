@@ -212,21 +212,22 @@ Human-readable results also go to **stdout**. Invalid CLI arguments are reported
 | **1** | One or more diagnostic failures, or warnings with `--strict` |
 | **2** | Invalid Doctor arguments (`CLI_INVALID_ARGS`) |
 
-Example human output (abbreviated):
+Example human output (abbreviated; a real run emits every diagnostic, not only the two shown here):
 
 ```text
 RenderShield doctor v1.1.1
 
 Config: rendershield.config.json
+Output: (not built)
 
-  PASS   DOCTOR_CONFIG_FOUND              Configuration loaded
-  WARN   DOCTOR_OUTPUT_MISSING            Built output directory is missing
+  PASS   DOCTOR_CONFIG_FOUND               Configuration loaded
+  WARN   DOCTOR_OUTPUT_MISSING             Output directory "dist-prerender" not found
 
-Summary: 12 pass, 1 warn, 0 fail
-Doctor: OK — no blocking issues found.
+Summary: 1 pass, 1 warn, 0 fail
+Doctor: OK
 ```
 
-Example JSON shape (abbreviated; real output includes every diagnostic field):
+Example JSON shape (abbreviated; summary counts match only the diagnostics shown below — a real `--json` run includes the complete diagnostics array and matching summary):
 
 ```json
 {
@@ -234,9 +235,29 @@ Example JSON shape (abbreviated; real output includes every diagnostic field):
   "command": "doctor",
   "ok": true,
   "strict": false,
+  "skipOutput": false,
   "configPath": "rendershield.config.json",
-  "summary": { "pass": 12, "warning": 1, "fail": 0 },
-  "diagnostics": []
+  "summary": {
+    "pass": 1,
+    "warning": 1,
+    "fail": 0
+  },
+  "diagnostics": [
+    {
+      "phaseId": "config",
+      "code": "DOCTOR_CONFIG_FOUND",
+      "severity": "pass",
+      "category": "config",
+      "message": "Configuration loaded"
+    },
+    {
+      "phaseId": "outputPresence",
+      "code": "DOCTOR_OUTPUT_MISSING",
+      "severity": "warning",
+      "category": "output",
+      "message": "Output directory \"dist-prerender\" not found"
+    }
+  ]
 }
 ```
 
