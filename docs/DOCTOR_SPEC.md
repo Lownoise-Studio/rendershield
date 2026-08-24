@@ -91,7 +91,7 @@ Doctor **may read:** config, Markdown under `content.markdown.baseDir`, files un
 
 Doctor **must not:** write/delete files, invoke build/init, network fetch, spawn browsers, read Wrangler/provider config, import React.
 
-**Acceptance test (S6 — complete):** `test/doctor-readonly-proof.test.ts` invokes the compiled production CLI (`dist/cli.js`) against representative project fixtures. Before/after snapshots capture path names, entry kinds (file/directory/symlink), content hashes, sizes, modes, symlink targets, and mtimes (atime excluded). Any change fails. Scenarios include built output, pre-build missing output, invalid config, frontmatter failure, safe nested and double-dot-prefixed artifact paths, and in-project symlinks. CI job `doctor-readonly` runs this proof as a dedicated gate.
+**Acceptance test (S6 — complete):** `test/doctor-readonly-proof.test.ts` invokes the compiled production CLI (`dist/cli.js`) against representative project fixtures. Before/after snapshots capture the project root (as `"."`) plus descendants: path names, entry kinds (file/directory/symlink), content hashes, sizes, modes, symlink targets, and mtimes (atime excluded). Any change fails, including transient root-level create/delete that would otherwise leave the child-entry set unchanged while updating root mtime. Scenarios include built output, pre-build missing output, invalid config, frontmatter failure, safe nested and double-dot-prefixed artifact paths, and in-project symlinks. CI job `doctor-readonly` runs this proof as a dedicated gate.
 
 ---
 

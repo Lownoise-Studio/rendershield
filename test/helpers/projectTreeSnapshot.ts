@@ -17,14 +17,62 @@ function normalizeRelPath(relPath: string): string {
   return relPath.split(path.sep).join("/");
 }
 
+async function captureEntry(fullPath: string): Promise<ProjectTreeEntry | null> {
+  let stat: fs.Stats;
+  try {
+    stat = await fs.lstat(fullPath);
+  } catch {
+    return null;
+  }
+
+  const base: ProjectTreeEntry = {
+    type: "other",
+    mode: stat.mode,
+    size: stat.size,
+    mtimeMs: stat.mtimeMs,
+  };
+
+  if (stat.isDirectory()) {
+    return { ...base, type: "directory" };
+  }
+
+  if (stat.isSymbolicLink()) {
+    let linkTarget = "";
+    try {
+      linkTarget = normalizeRelPath(await fs.readlink(fullPath));
+    } catch {
+      linkTarget = "";
+    }
+    return { ...base, type: "symlink", linkTarget };
+  }
+
+  if (stat.isFile()) {
+    const buf = await fs.readFile(fullPath);
+    return {
+      ...base,
+      type: "file",
+      size: buf.length,
+      contentHash: crypto.createHash("sha256").update(buf).digest("hex"),
+    };
+  }
+
+  return base;
+}
+
 /**
  * Deterministic project-tree snapshot for read-only proofs.
- * Captures path, entry kind, mode, size, mtime, content hash (files), and symlink targets.
+ * Captures the project root (as ".") plus descendants: path, entry kind, mode,
+ * size, mtime, content hash (files), and symlink targets.
  * Excludes atime (reads may update it on some filesystems).
  */
 export async function captureProjectTree(root: string): Promise<ProjectTreeSnapshot> {
   const snapshot: ProjectTreeSnapshot = new Map();
   if (!(await fs.pathExists(root))) return snapshot;
+
+  const rootEntry = await captureEntry(root);
+  if (rootEntry) {
+    snapshot.set(".", rootEntry);
+  }
 
   async function walk(current: string): Promise<void> {
     let entries: fs.Dirent[];
@@ -39,49 +87,13 @@ export async function captureProjectTree(root: string): Promise<ProjectTreeSnaps
     for (const entry of entries) {
       const full = path.join(current, entry.name);
       const rel = normalizeRelPath(path.relative(root, full));
-      let stat: fs.Stats;
-      try {
-        stat = await fs.lstat(full);
-      } catch {
-        continue;
-      }
+      const captured = await captureEntry(full);
+      if (!captured) continue;
 
-      const base: ProjectTreeEntry = {
-        type: "other",
-        mode: stat.mode,
-        size: stat.size,
-        mtimeMs: stat.mtimeMs,
-      };
-
-      if (stat.isDirectory()) {
-        snapshot.set(rel, { ...base, type: "directory" });
+      snapshot.set(rel, captured);
+      if (captured.type === "directory") {
         await walk(full);
-        continue;
       }
-
-      if (stat.isSymbolicLink()) {
-        let linkTarget = "";
-        try {
-          linkTarget = normalizeRelPath(await fs.readlink(full));
-        } catch {
-          linkTarget = "";
-        }
-        snapshot.set(rel, { ...base, type: "symlink", linkTarget });
-        continue;
-      }
-
-      if (stat.isFile()) {
-        const buf = await fs.readFile(full);
-        snapshot.set(rel, {
-          ...base,
-          type: "file",
-          size: buf.length,
-          contentHash: crypto.createHash("sha256").update(buf).digest("hex"),
-        });
-        continue;
-      }
-
-      snapshot.set(rel, base);
     }
   }
 
