@@ -1,8 +1,8 @@
 # DOCTOR_SPEC.md — `rendershield doctor`
 
-> **Status: In progress — CLI not yet shipped**  
-> RenderShield Prerender does **not** expose `rendershield doctor` in the CLI or public API yet.  
-> **S1–S4** are **complete**. S5–S6 remain.
+> **Status: CLI shipped (S5)**  
+> RenderShield Prerender exposes `rendershield doctor` in the CLI and public API.  
+> **S1–S5** are **complete**. S6 remains.
 
 **Target package:** `@lownoise-studio/rendershield` (RenderShield Prerender)  
 **Scope (v1):** Offline diagnostics only  
@@ -28,12 +28,9 @@
 - `src/core/markdownContent.ts` — shared Markdown primitives (S1)
 - `src/doctor/types.ts`, `collector.ts`, `phases.ts`, `engine.ts` — `runDoctorEngine()` (S2)
 
-**Planned insertion points (not yet shipped):**
+**Planned insertion points (S6 only):**
 
-- `src/commands/doctor.ts` — `cmdDoctor(cwd, options)` wrapping `runDoctorEngine()` *(S5)*
-- `src/cliArgs.ts` — `parseDoctorArgs()` with strict unknown-flag handling *(S5)*
-- `src/cli.ts` — dispatch + help *(S5)*
-- `src/index.ts` — export **only** `cmdDoctor` and Doctor public types *(S5)*
+- Read-only hash-tree proof in CI and user-facing documentation
 
 ---
 
@@ -253,7 +250,7 @@ rendershield verify --prod <url>
 | **S2** | Internal Doctor types, collector, phase runner, and `runDoctorEngine()` (no CLI, no filesystem diagnostics, no public exports) | **Complete** |
 | **S3** | Config/content diagnostic phases 1–5 | **Complete** |
 | **S4** | Output diagnostic phases 6–10 | **Complete** |
-| **S5** | `cmdDoctor`, CLI parsing/dispatch, human + `--json` formatters, public types | Not started |
+| **S5** | `cmdDoctor`, CLI parsing/dispatch, human + `--json` formatters, public types | **Complete** |
 | **S6** | Read-only proof (hash tree snapshot), packaging/public-API tests, user documentation | Not started |
 
 **Note:** Earlier drafts described S2 as including `cmdDoctor`. That was split: S2 ships the internal engine only; S5 ships the CLI command and public API.
@@ -305,4 +302,4 @@ rendershield verify --prod <url>
 
 ## 17. Verdict
 
-**READY_TO_IMPLEMENT S5+** — S1–S4 prerequisites are complete. Next: CLI and public API (S5), then read-only proof and user docs (S6).
+**READY_FOR_S6** — S1–S5 prerequisites are complete. Next: read-only proof and user docs (S6).

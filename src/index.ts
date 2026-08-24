@@ -15,6 +15,20 @@ export {
   type VerifyResult,
   type VerifyPageResult,
 } from "./commands/verify.js";
+export { cmdDoctor, type DoctorCommandOptions } from "./commands/doctor.js";
+
+export type {
+  DoctorSeverity,
+  DoctorCategory,
+  DoctorPhaseId,
+  DoctorDiagnosticCode,
+  DoctorDiagnosticDetails,
+  DoctorDiagnostic,
+  DoctorSummary,
+  DoctorEngineOptions,
+  DoctorResult,
+  DoctorCliResult,
+} from "./doctor/types.js";
 
 export { loadConfig } from "./core/loadConfig.js";
 export { loadAllMarkdownDocs } from "./core/loadMarkdown.js";

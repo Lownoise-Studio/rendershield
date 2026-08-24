@@ -1,5 +1,7 @@
 import type { CommandOptions } from "./configPath.js";
 import type { VerifyOptions } from "./commands/verify.js";
+import type { DoctorCommandOptions } from "./commands/doctor.js";
+import { renderShieldError } from "./errors.js";
 
 const GLOBAL_FLAGS = new Set(["--config"]);
 
@@ -65,6 +67,51 @@ export function parseVerifyArgs(
 
   if (!options.prodUrl && positional[0] && !positional[0].startsWith("-")) {
     options.prodUrl = positional[0];
+  }
+
+  return options;
+}
+
+const DOCTOR_FLAGS = new Set(["--json", "--strict", "--skip-output"]);
+
+export function parseDoctorArgs(
+  argv: string[],
+  globalOptions: CommandOptions
+): DoctorCommandOptions {
+  const options: DoctorCommandOptions = { ...globalOptions };
+  const positional: string[] = [];
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (DOCTOR_FLAGS.has(arg)) {
+      if (arg === "--json") options.json = true;
+      if (arg === "--strict") options.strict = true;
+      if (arg === "--skip-output") options.skipOutput = true;
+      continue;
+    }
+    if (arg === "--config") {
+      const value = argv[i + 1]?.trim();
+      if (!value || value.startsWith("-")) {
+        throw renderShieldError(
+          "CLI_INVALID_ARGS",
+          "--config requires a path argument"
+        );
+      }
+      options.configPath = value;
+      i++;
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      throw renderShieldError("CLI_INVALID_ARGS", `Unknown flag: ${arg}`);
+    }
+    positional.push(arg);
+  }
+
+  if (positional.length > 0) {
+    throw renderShieldError(
+      "CLI_INVALID_ARGS",
+      `Unexpected positional argument: ${positional[0]}`
+    );
   }
 
   return options;

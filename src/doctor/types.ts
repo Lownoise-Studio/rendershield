@@ -1,5 +1,5 @@
 /**
- * Internal Doctor types (not exported from package root until S5/S6).
+ * Doctor types. Public Doctor types are exported from the package root (S5+).
  */
 
 export type DoctorSeverity = "pass" | "warning" | "fail";
@@ -100,4 +100,10 @@ export type DoctorResult = {
   skipOutput: boolean;
   summary: DoctorSummary;
   diagnostics: DoctorDiagnostic[];
+};
+
+/** CLI/API result shape for `cmdDoctor` and `--json` output. */
+export type DoctorCliResult = DoctorResult & {
+  version: string;
+  command: "doctor";
 };

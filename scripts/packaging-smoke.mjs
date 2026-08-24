@@ -112,7 +112,7 @@ function main() {
       `
 import * as rs from ${JSON.stringify(PKG_NAME)};
 
-const fns = ["cmdInit", "cmdBuild", "cmdVerify", "loadConfig", "checkPrerenderContract"];
+const fns = ["cmdInit", "cmdBuild", "cmdVerify", "cmdDoctor", "loadConfig", "checkPrerenderContract"];
 const bad = [];
 for (const k of fns) {
   if (typeof rs[k] !== "function") bad.push(k + " (expected function)");

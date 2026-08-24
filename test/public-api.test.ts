@@ -6,6 +6,7 @@ describe("public API exports", () => {
     expect(typeof api.cmdInit).toBe("function");
     expect(typeof api.cmdBuild).toBe("function");
     expect(typeof api.cmdVerify).toBe("function");
+    expect(typeof api.cmdDoctor).toBe("function");
     expect(typeof api.loadConfig).toBe("function");
     expect(typeof api.loadAllMarkdownDocs).toBe("function");
     expect(typeof api.renderPageHtml).toBe("function");
