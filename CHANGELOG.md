@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- Patched transitive dependencies used by the build pipeline: `markdown-it` (typographer/smartquotes DoS), `linkify-it` (linkify/mailto DoS), `js-yaml` (YAML merge-key DoS via gray-matter frontmatter), and `picomatch` (glob matching via fast-glob).
+- Patched direct and transitive dependencies used by the build pipeline: `markdown-it` (typographer/smartquotes DoS), `linkify-it` (linkify/mailto DoS), `js-yaml` (YAML merge-key DoS via gray-matter frontmatter), and `picomatch` (glob matching via fast-glob).
 
 ### Changed
 
