@@ -204,4 +204,34 @@ describe("loadConfig", () => {
     });
     await expect(loadConfig(tmpDir)).rejects.toThrow(/schemaType must be one of/);
   });
+
+  it("rejects duplicate collection names even when routes do not collide", async () => {
+    await writeConfig({
+      ...structuredClone(minimalValid),
+      content: {
+        markdown: {
+          baseDir: "content",
+          collections: [
+            {
+              name: "blog",
+              pattern: "blog/**/*.md",
+              routeBase: "/blog",
+              schemaType: "Article",
+            },
+            {
+              name: "blog",
+              pattern: "news/**/*.md",
+              routeBase: "/news",
+              schemaType: "BlogPosting",
+            },
+          ],
+        },
+      },
+    });
+    await expect(loadConfig(tmpDir)).rejects.toMatchObject({
+      code: "CONFIG_INVALID",
+      message: 'Duplicate collection name "blog"; collection names must be unique',
+      details: { collectionName: "blog", count: 2 },
+    });
+  });
 });

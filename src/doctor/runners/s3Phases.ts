@@ -233,26 +233,6 @@ export async function runContentSemanticsPhase(
 ): Promise<void> {
   if (!ctx.config) return;
 
-  const names = ctx.config.content.markdown.collections.map((c) => c.name);
-  const nameCounts = new Map<string, number>();
-  for (const name of names) {
-    nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
-  }
-  for (const [name, count] of nameCounts) {
-    if (count > 1) {
-      collector.warn(
-        "contentSemantics",
-        "DOCTOR_COLLECTION_DUPLICATE_NAME",
-        "content",
-        `Duplicate collection name "${name}" appears ${count} times`,
-        {
-          hint: "Use unique collection names for clarity.",
-          details: { collectionName: name, count },
-        }
-      );
-    }
-  }
-
   for (const col of ctx.config.content.markdown.collections) {
     const routeBase = col.routeBase;
     if (!routeBase.startsWith("/")) {

@@ -221,15 +221,52 @@ Body.
     expect(result.ok).toBe(false);
   });
 
-  it("detects duplicate collection names, slugs, and route collisions", async () => {
+  it("reports DOCTOR_CONFIG_INVALID for duplicate collection names", async () => {
     await writeConfig({
       ...minimalValid,
       content: {
         markdown: {
           baseDir: "content",
           collections: [
-            { name: "blog", pattern: "blog/a/**/*.md", routeBase: "/blog", schemaType: "Article" },
-            { name: "blog", pattern: "blog/b/**/*.md", routeBase: "/blog", schemaType: "Article" },
+            {
+              name: "blog",
+              pattern: "blog/**/*.md",
+              routeBase: "/blog",
+              schemaType: "Article",
+            },
+            {
+              name: "blog",
+              pattern: "news/**/*.md",
+              routeBase: "/news",
+              schemaType: "BlogPosting",
+            },
+          ],
+        },
+      },
+    });
+
+    const result = await runDoctorEngine({ cwd: tmpDir });
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "DOCTOR_CONFIG_INVALID",
+        phaseId: "config",
+        message: 'Duplicate collection name "blog"; collection names must be unique',
+        details: expect.objectContaining({ collectionName: "blog", count: 2 }),
+      })
+    );
+    expect(result.diagnostics.some((d) => d.phaseId === "contentSemantics")).toBe(false);
+  });
+
+  it("detects duplicate slugs and route collisions", async () => {
+    await writeConfig({
+      ...minimalValid,
+      content: {
+        markdown: {
+          baseDir: "content",
+          collections: [
+            { name: "blog-a", pattern: "blog/a/**/*.md", routeBase: "/blog", schemaType: "Article" },
+            { name: "blog-b", pattern: "blog/b/**/*.md", routeBase: "/blog", schemaType: "Article" },
           ],
         },
       },
@@ -250,7 +287,6 @@ Body.
     });
 
     const result = await runDoctorEngine({ cwd: tmpDir });
-    expect(result.diagnostics.some((d) => d.code === "DOCTOR_COLLECTION_DUPLICATE_NAME")).toBe(true);
     expect(result.diagnostics.some((d) => d.code === "DOCTOR_ROUTE_DUPLICATE_SLUG")).toBe(true);
     expect(result.diagnostics.some((d) => d.code === "DOCTOR_ROUTE_COLLISION")).toBe(true);
   });
