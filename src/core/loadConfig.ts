@@ -195,10 +195,16 @@ export async function loadConfig(
   if (!parsed?.output?.outDir) {
     throw renderShieldError("CONFIG_INVALID", "output.outDir is required");
   }
+  if (typeof parsed.output.outDir !== "string" || parsed.output.outDir.trim() === "") {
+    throw renderShieldError(
+      "CONFIG_INVALID",
+      "output.outDir must be a non-empty string"
+    );
+  }
 
-  parsed.content.markdown.collections = normalizeCollections(
-    parsed.content.markdown.collections
-  );
+  const collections = normalizeCollections(parsed.content.markdown.collections);
+  validateUniqueCollectionNames(collections);
+  parsed.content.markdown.collections = collections;
 
   const sitemapFlag = coerceBoolFlag(parsed, "sitemap", true);
   const sitemapObj = parsed.sitemap as Record<string, unknown> | undefined;
@@ -279,4 +285,22 @@ function parseSchemaType(value: unknown, index: number): SchemaType {
     );
   }
   return value as SchemaType;
+}
+
+function validateUniqueCollectionNames(
+  collections: RenderShieldConfig["content"]["markdown"]["collections"]
+): void {
+  const nameCounts = new Map<string, number>();
+  for (const col of collections) {
+    nameCounts.set(col.name, (nameCounts.get(col.name) ?? 0) + 1);
+  }
+  for (const [name, count] of nameCounts) {
+    if (count > 1) {
+      throw renderShieldError(
+        "CONFIG_INVALID",
+        `Duplicate collection name "${name}"; collection names must be unique`,
+        { collectionName: name, count }
+      );
+    }
+  }
 }

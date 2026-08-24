@@ -1,8 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import fs from "fs-extra";
+import path from "node:path";
+import os from "node:os";
 import { DoctorCollector, computeDoctorOk, summarizeDiagnostics } from "../dist/doctor/collector.js";
 import { DOCTOR_PHASE_ORDER } from "../dist/doctor/phases.js";
 import { runDoctorEngine } from "../dist/doctor/engine.js";
 import type { DoctorDiagnostic, DoctorPhaseId } from "../dist/doctor/types.js";
+
+const noopRunners = Object.fromEntries(
+  DOCTOR_PHASE_ORDER.map((phaseId) => [phaseId, () => {}])
+) as Partial<Record<DoctorPhaseId, () => void>>;
 
 function diag(
   partial: Omit<DoctorDiagnostic, "phaseId" | "category"> & {
@@ -96,15 +103,20 @@ describe("runDoctorEngine", () => {
     errorSpy.mockRestore();
   });
 
-  it("returns empty diagnostics and ok=true with default options", async () => {
-    const result = await runDoctorEngine({ cwd: process.cwd() });
+  it("returns empty diagnostics and ok=true in an empty project dir", async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "rendershield-doc-empty-"));
+    try {
+      const result = await runDoctorEngine({ cwd: tmpDir, phaseRunners: noopRunners });
 
-    expect(result.ok).toBe(true);
-    expect(result.strict).toBe(false);
-    expect(result.skipOutput).toBe(false);
-    expect(result.configPath).toBe("rendershield.config.json");
-    expect(result.summary).toEqual({ pass: 0, warning: 0, fail: 0 });
-    expect(result.diagnostics).toEqual([]);
+      expect(result.ok).toBe(true);
+      expect(result.strict).toBe(false);
+      expect(result.skipOutput).toBe(false);
+      expect(result.configPath).toBe("rendershield.config.json");
+      expect(result.summary).toEqual({ pass: 0, warning: 0, fail: 0 });
+      expect(result.diagnostics).toEqual([]);
+    } finally {
+      await fs.remove(tmpDir).catch(() => {});
+    }
   });
 
   it("runs phases in deterministic DOCTOR_PHASE_ORDER", async () => {
@@ -155,6 +167,7 @@ describe("runDoctorEngine", () => {
       cwd: process.cwd(),
       strict: true,
       phaseRunners: {
+        ...noopRunners,
         config: (_ctx, collector) => {
           collector.pass("config", "DOCTOR_CONFIG_FOUND", "config", "loaded");
         },
@@ -178,6 +191,7 @@ describe("runDoctorEngine", () => {
     await runDoctorEngine({
       cwd: process.cwd(),
       phaseRunners: {
+        ...noopRunners,
         config: (_ctx, collector) => {
           collector.fail("config", "DOCTOR_CONFIG_MISSING", "config", "missing");
         },
@@ -192,6 +206,7 @@ describe("runDoctorEngine", () => {
     const result = await runDoctorEngine({
       cwd: process.cwd(),
       phaseRunners: {
+        ...noopRunners,
         config: (_ctx, collector) => {
           collector.pass("config", "DOCTOR_CONFIG_FOUND", "config", "loaded", {
             details: { path: "rendershield.config.json", extra: "future" },

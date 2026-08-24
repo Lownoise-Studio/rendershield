@@ -174,6 +174,17 @@ describe("loadConfig", () => {
     expect(cfg.content.markdown.collections[0].schemaType).toBe("Article");
   });
 
+  it("rejects non-string output.outDir", async () => {
+    await writeConfig({
+      ...structuredClone(minimalValid),
+      output: { outDir: 1, prettyHtml: true },
+    });
+    await expect(loadConfig(tmpDir)).rejects.toMatchObject({
+      code: "CONFIG_INVALID",
+      message: "output.outDir must be a non-empty string",
+    });
+  });
+
   it("rejects invalid collection schemaType", async () => {
     await writeConfig({
       ...structuredClone(minimalValid),
@@ -192,5 +203,35 @@ describe("loadConfig", () => {
       },
     });
     await expect(loadConfig(tmpDir)).rejects.toThrow(/schemaType must be one of/);
+  });
+
+  it("rejects duplicate collection names even when routes do not collide", async () => {
+    await writeConfig({
+      ...structuredClone(minimalValid),
+      content: {
+        markdown: {
+          baseDir: "content",
+          collections: [
+            {
+              name: "blog",
+              pattern: "blog/**/*.md",
+              routeBase: "/blog",
+              schemaType: "Article",
+            },
+            {
+              name: "blog",
+              pattern: "news/**/*.md",
+              routeBase: "/news",
+              schemaType: "BlogPosting",
+            },
+          ],
+        },
+      },
+    });
+    await expect(loadConfig(tmpDir)).rejects.toMatchObject({
+      code: "CONFIG_INVALID",
+      message: 'Duplicate collection name "blog"; collection names must be unique',
+      details: { collectionName: "blog", count: 2 },
+    });
   });
 });

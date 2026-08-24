@@ -1,11 +1,15 @@
 import type { DoctorCollector } from "./collector.js";
+import type { DoctorPhaseContext } from "./context.js";
 import type { DoctorEngineOptions, DoctorPhaseId } from "./types.js";
+import {
+  runConfigPhase,
+  runContentInventoryPhase,
+  runContentSemanticsPhase,
+  runOutputPathPhase,
+  runSiteOriginWorkerPhase,
+} from "./runners/s3Phases.js";
 
-export type DoctorPhaseContext = {
-  cwd: string;
-  options: Required<Pick<DoctorEngineOptions, "strict" | "skipOutput">> &
-    Pick<DoctorEngineOptions, "configPath">;
-};
+export type { DoctorPhaseContext } from "./context.js";
 
 export type DoctorPhaseRunner = (
   ctx: DoctorPhaseContext,
@@ -28,13 +32,13 @@ export const DOCTOR_PHASE_ORDER: readonly DoctorPhaseId[] = [
 
 const noopPhase: DoctorPhaseRunner = () => {};
 
-/** Stub phase runners for S2; S3/S4 will replace with real diagnostics. */
+/** Phase runners: S3 implements phases 1–5; S4 will replace output-phase stubs. */
 export const DOCTOR_PHASE_RUNNERS: Record<DoctorPhaseId, DoctorPhaseRunner> = {
-  config: noopPhase,
-  outputPath: noopPhase,
-  contentInventory: noopPhase,
-  contentSemantics: noopPhase,
-  siteOriginWorker: noopPhase,
+  config: runConfigPhase,
+  outputPath: runOutputPathPhase,
+  contentInventory: runContentInventoryPhase,
+  contentSemantics: runContentSemanticsPhase,
+  siteOriginWorker: runSiteOriginWorkerPhase,
   outputPresence: noopPhase,
   freshness: noopPhase,
   contract: noopPhase,
