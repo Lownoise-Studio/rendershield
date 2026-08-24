@@ -1,8 +1,8 @@
 # DOCTOR_SPEC.md — `rendershield doctor`
 
-> **Status: Proposed — not yet implemented**  
-> This document describes the planned offline `rendershield doctor` command.  
-> RenderShield Prerender does **not** ship `doctor` today. Implementation will follow the slices below; S1 (shared Markdown primitives) is the first prerequisite.
+> **Status: In progress — CLI not yet shipped**  
+> RenderShield Prerender does **not** expose `rendershield doctor` in the CLI or public API yet.  
+> **S1** (shared Markdown primitives) and **S2** (internal engine) are **complete**. S3–S6 remain.
 
 **Target package:** `@lownoise-studio/rendershield` (RenderShield Prerender)  
 **Scope (v1):** Offline diagnostics only  
@@ -23,12 +23,17 @@
 | `checkPrerenderContract()` | Crawler HTML-contract checks on built files |
 | `generateSitemapXml()` / `generateRobotsTxt()` / `generateWorkerJs()` | Expected artifact comparison (string-level, no execution) |
 
-**Planned insertion points:**
+**Implemented (internal):**
 
-- `src/commands/doctor.ts` — `cmdDoctor(cwd, options)` *(not implemented)*
-- `src/cliArgs.ts` — `parseDoctorArgs()` with strict unknown-flag handling *(not implemented)*
-- `src/cli.ts` — dispatch + help *(not implemented)*
-- `src/index.ts` — export **only** `cmdDoctor` and Doctor public types *(not implemented)*
+- `src/core/markdownContent.ts` — shared Markdown primitives (S1)
+- `src/doctor/types.ts`, `collector.ts`, `phases.ts`, `engine.ts` — `runDoctorEngine()` (S2)
+
+**Planned insertion points (not yet shipped):**
+
+- `src/commands/doctor.ts` — `cmdDoctor(cwd, options)` wrapping `runDoctorEngine()` *(S5)*
+- `src/cliArgs.ts` — `parseDoctorArgs()` with strict unknown-flag handling *(S5)*
+- `src/cli.ts` — dispatch + help *(S5)*
+- `src/index.ts` — export **only** `cmdDoctor` and Doctor public types *(S5)*
 
 ---
 
@@ -95,7 +100,7 @@ Doctor **must not:** write/delete files, invoke build/init, network fetch, spawn
 
 ---
 
-## 5. Shared Markdown primitives (required — S1)
+## 5. Shared Markdown primitives (S1 — complete)
 
 Doctor **must not** reimplement Markdown discovery, frontmatter parsing, or route construction.
 
@@ -106,6 +111,22 @@ Doctor **must not** reimplement Markdown discovery, frontmatter parsing, or rout
 | `buildRoutePath` | `src/core/markdownContent.ts` | `routeBase` + `slug` → `routePath` |
 
 `loadAllMarkdownDocs` (and **build**) consume these primitives. Primitives are **internal** — not exported from the package root.
+
+---
+
+## 5b. Internal Doctor engine (S2 — complete)
+
+S2 delivers the **pure engine** only — not the CLI command.
+
+| Component | Module | Responsibility |
+|-----------|--------|----------------|
+| Types | `src/doctor/types.ts` | `DoctorSeverity`, `DoctorPhaseId`, `DoctorDiagnostic`, `DoctorResult`, etc. |
+| Collector | `src/doctor/collector.ts` | PASS/WARNING/FAIL aggregation, strict `ok` semantics |
+| Phases | `src/doctor/phases.ts` | `DOCTOR_PHASE_ORDER`, stub runners (filled in S3/S4) |
+| Engine | `src/doctor/engine.ts` | `runDoctorEngine()` — structured result, **no stdout/stderr** |
+
+Phase runners are **no-op stubs** until S3 (phases 1–5) and S4 (phases 6–10).  
+`cmdDoctor`, CLI flags, formatters, and public exports are **S5** — intentionally deferred from S2.
 
 ---
 
@@ -144,7 +165,7 @@ Key areas:
 
 > mtime freshness is a **best-effort warning**, not deterministic proof. Hash-based freshness is **deferred**.
 
-Full code list and phase details: see implementation PRs following S2–S6.
+Full code list and phase details: see implementation PRs for S3–S6.
 
 ---
 
@@ -195,9 +216,11 @@ Complete JSON results available in the **open-source CLI** — no hosted service
 
 ---
 
-## 11. Programmatic API (planned public surface)
+## 11. Programmatic API (planned public surface — S5)
 
-**Allowed new exports:** `cmdDoctor`, Doctor types only.
+**Allowed new exports (S5):** `cmdDoctor`, Doctor types only.
+
+**Internal today (S2, not exported from package root):** `runDoctorEngine`, `DoctorCollector`, phase runners.
 
 **Not exported:** path-safety, route listing, Markdown primitives, freshness helpers.
 
@@ -227,12 +250,14 @@ rendershield verify --prod <url>
 
 | Slice | Scope | Status |
 |-------|-------|--------|
-| **S1** | Extract shared Markdown primitives; refactor `loadAllMarkdownDocs`; parity tests | **In progress / prerequisite** |
-| **S2** | `cmdDoctor` orchestrator, types, severity/exit summary | Not started |
-| **S3** | Phases 1–5 | Not started |
-| **S4** | Phases 6–10 | Not started |
-| **S5** | CLI dispatch, `parseDoctorArgs`, human + `--json` formatters | Not started |
-| **S6** | Tests (hash tree snapshot), public-api/packaging, user-facing docs | Not started |
+| **S1** | Shared Markdown primitives (`discoverCollectionFiles`, `parseMarkdownFile`, `buildRoutePath`); refactor `loadAllMarkdownDocs`; parity tests | **Complete** |
+| **S2** | Internal Doctor types, collector, phase runner, and `runDoctorEngine()` (no CLI, no filesystem diagnostics, no public exports) | **Complete** |
+| **S3** | Config/content diagnostic phases 1–5 | Not started |
+| **S4** | Output diagnostic phases 6–10 | Not started |
+| **S5** | `cmdDoctor`, CLI parsing/dispatch, human + `--json` formatters, public types | Not started |
+| **S6** | Read-only proof (hash tree snapshot), packaging/public-API tests, user documentation | Not started |
+
+**Note:** Earlier drafts described S2 as including `cmdDoctor`. That was split: S2 ships the internal engine only; S5 ships the CLI command and public API.
 
 ---
 
@@ -244,8 +269,8 @@ rendershield verify --prod <url>
 4. Unknown flags → `CLI_INVALID_ARGS`, exit **2**.
 5. `--json` includes all FAIL/WARN; `version` from package metadata.
 6. Read-only: before/after file-tree + content hashes unchanged.
-7. Build and doctor share Markdown primitives.
-8. Public API adds only `cmdDoctor` + Doctor types.
+7. Build and doctor share Markdown primitives. *(S1 complete)*
+8. Public API adds only `cmdDoctor` + Doctor types. *(S5)*
 9. No React imports; no network in v1.
 
 ---
@@ -281,4 +306,4 @@ rendershield verify --prod <url>
 
 ## 17. Verdict
 
-**READY_TO_IMPLEMENT** — offline v1 is supported once S1 (shared Markdown primitives) and subsequent slices land. S1 does not ship `doctor`; it prepares internal reuse for S2+.
+**READY_TO_IMPLEMENT S3+** — S1 and S2 prerequisites are complete. Next: wire real diagnostics into phase runners (S3/S4), then CLI and public API (S5), then read-only proof and user docs (S6).
