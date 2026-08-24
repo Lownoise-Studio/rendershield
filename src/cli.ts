@@ -77,7 +77,9 @@ async function main() {
       const doctorOptions = parseDoctorArgs(cmdArgs, globalOptions);
       const doctorResult = await cmdDoctor(undefined, doctorOptions);
       if (!doctorResult.ok) {
-        process.exit(1);
+        // Set exitCode and return so stdout (especially large --json) can drain.
+        process.exitCode = 1;
+        return;
       }
       return;
     }
