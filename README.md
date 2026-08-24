@@ -1,11 +1,13 @@
-# RenderShield
+# RenderShield Prerender
 
-RenderShield produces complete, static HTML for crawlers — and can prove
+**RenderShield Prerender** produces complete, static HTML for crawlers — and can prove
 that bots receive it in production.
 
 It prerenders structured content ahead of time and optionally routes crawler
 requests to that output at the edge, while normal users continue to receive
 your SPA.
+
+The npm package and CLI remain `@lownoise-studio/rendershield` and `rendershield`.
 
 No frameworks required.
 No browser rendering.
@@ -26,14 +28,14 @@ Search engines, social scrapers, and AI crawlers may:
 - see partial metadata
 - receive inconsistent output
 
-RenderShield enforces two guarantees:
+RenderShield Prerender enforces two guarantees:
 
 - **Build-time contract** — Generated HTML must contain required metadata and content.
 - **Production routing proof** — Bots must receive prerendered HTML (verified via header).
 
 ---
 
-## What RenderShield does
+## What RenderShield Prerender does
 
 - Converts structured content (Markdown) into full static HTML pages
 - Injects:
@@ -182,7 +184,7 @@ Config reference: [docs/CONFIG.md](docs/CONFIG.md) · JSON Schema: `rendershield
 
 ## Programmatic API
 
-RenderShield can be used as a library:
+RenderShield Prerender can be used as a library through the existing package name:
 
 ```ts
 import { cmdBuild, loadConfig, checkPrerenderContract, RenderShieldError } from "@lownoise-studio/rendershield";
@@ -212,7 +214,7 @@ See: [docs/deploy-cloudflare.md](docs/deploy-cloudflare.md)
 
 ## Philosophy
 
-RenderShield is intentionally narrow.
+RenderShield Prerender is intentionally narrow.
 
 It does not attempt to simulate browsers.
 It does not promise SEO outcomes.
