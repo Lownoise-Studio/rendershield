@@ -1,5 +1,6 @@
 import fs from "fs-extra";
 import path from "node:path";
+import { resolveArtifactPathInOutDir } from "../../core/artifactPathSafety.js";
 import { validateOutputPath } from "../../core/outputPathSafety.js";
 import {
   indexHtmlPathToRoute,
@@ -81,10 +82,6 @@ function getPrimaryJsonLdType(html: string): string | null {
 
 function isRouteCoveredByWorker(routePath: string, rewriteRouteBases: string[]): boolean {
   return rewriteRouteBases.some((base) => routePath.startsWith(base));
-}
-
-function artifactPathInOutDir(outDirAbs: string, artifactPath: string): string {
-  return path.join(outDirAbs, artifactPath.replace(/^\//, ""));
 }
 
 export async function runOutputPresencePhase(
@@ -352,7 +349,11 @@ export async function runSitemapRobotsPhase(
       { details: { path: cfg.sitemap.path } }
     );
 
-    const sitemapPath = artifactPathInOutDir(ctx.outDirAbs, cfg.sitemap.path);
+    const sitemapPath = await resolveArtifactPathInOutDir(
+      ctx.outDirAbs,
+      cfg.sitemap.path,
+      "sitemap.path"
+    );
     if (!(await fs.pathExists(sitemapPath))) {
       collector.fail(
         "sitemapRobots",
@@ -397,7 +398,11 @@ export async function runSitemapRobotsPhase(
   }
 
   if (cfg.robots.enabled) {
-    const robotsPath = artifactPathInOutDir(ctx.outDirAbs, cfg.robots.path);
+    const robotsPath = await resolveArtifactPathInOutDir(
+      ctx.outDirAbs,
+      cfg.robots.path,
+      "robots.path"
+    );
     const expectedRobots = generateRobotsTxt(cfg);
 
     if (!(await fs.pathExists(robotsPath))) {
