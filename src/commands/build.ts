@@ -8,6 +8,7 @@ import { generateRobotsTxt } from "../core/generateRobots.js";
 import { generateWorkerJs } from "../core/generateWorker.js";
 import { validatePrerenderHtml } from "../core/validateOutput.js";
 import { validateOutputPath } from "../core/outputPathSafety.js";
+import { resolveArtifactPathInOutDir } from "../core/artifactPathSafety.js";
 import { renderShieldError } from "../errors.js";
 import type { CommandOptions } from "../configPath.js";
 
@@ -59,14 +60,24 @@ export async function cmdBuild(cwd = process.cwd(), options?: CommandOptions) {
   // sitemap.xml
   if (cfg.sitemap.enabled) {
     const sitemapXml = generateSitemapXml(cfg, docs);
-    const sitemapPath = path.join(outDirAbs, cfg.sitemap.path.replace(/^\//, ""));
+    const sitemapPath = await resolveArtifactPathInOutDir(
+      outDirAbs,
+      cfg.sitemap.path,
+      "sitemap.path"
+    );
+    await fs.ensureDir(path.dirname(sitemapPath));
     await fs.writeFile(sitemapPath, sitemapXml, "utf8");
   }
 
   // robots.txt
   if (cfg.robots.enabled) {
     const robotsTxt = generateRobotsTxt(cfg);
-    const robotsPath = path.join(outDirAbs, cfg.robots.path.replace(/^\//, ""));
+    const robotsPath = await resolveArtifactPathInOutDir(
+      outDirAbs,
+      cfg.robots.path,
+      "robots.path"
+    );
+    await fs.ensureDir(path.dirname(robotsPath));
     await fs.writeFile(robotsPath, robotsTxt, "utf8");
   }
 

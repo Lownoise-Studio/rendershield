@@ -3,6 +3,10 @@ import path from "node:path";
 import { RenderShieldConfig, SCHEMA_TYPES, type SchemaType } from "../types.js";
 import { renderShieldError } from "../errors.js";
 import {
+  readArtifactPathConfig,
+  resolveArtifactPathInOutDir,
+} from "./artifactPathSafety.js";
+import {
   resolveConfigFile,
   DEFAULT_CONFIG_NAME,
   type CommandOptions,
@@ -208,24 +212,28 @@ export async function loadConfig(
 
   const sitemapFlag = coerceBoolFlag(parsed, "sitemap", true);
   const sitemapObj = parsed.sitemap as Record<string, unknown> | undefined;
-  const sitemapPathVal = sitemapObj?.path;
-  const sitemapPath =
-    typeof sitemapPathVal === "string" && sitemapPathVal.trim().startsWith("/")
-      ? sitemapPathVal.trim()
-      : DEFAULT_SITEMAP_PATH;
+  const sitemapPath = readArtifactPathConfig(
+    sitemapObj?.path,
+    DEFAULT_SITEMAP_PATH,
+    "sitemap.path"
+  );
   parsed.sitemap = { enabled: sitemapFlag.enabled, path: sitemapPath };
 
   const robotsFlag = coerceBoolFlag(parsed, "robots", true);
   const robotsObj = parsed.robots as Record<string, unknown> | undefined;
-  const robotsPathVal = robotsObj?.path;
-  const robotsPath =
-    typeof robotsPathVal === "string" && robotsPathVal.trim().startsWith("/")
-      ? robotsPathVal.trim()
-      : DEFAULT_ROBOTS_PATH;
+  const robotsPath = readArtifactPathConfig(
+    robotsObj?.path,
+    DEFAULT_ROBOTS_PATH,
+    "robots.path"
+  );
   parsed.robots = { enabled: robotsFlag.enabled, path: robotsPath };
 
   const workerFlag = coerceBoolFlag(parsed, "worker", true);
   normalizeWorker(parsed, workerFlag.enabled);
+
+  const outDirAbs = path.resolve(cwd, parsed.output.outDir as string);
+  await resolveArtifactPathInOutDir(outDirAbs, sitemapPath, "sitemap.path");
+  await resolveArtifactPathInOutDir(outDirAbs, robotsPath, "robots.path");
 
   return parsed as RenderShieldConfig;
 }
