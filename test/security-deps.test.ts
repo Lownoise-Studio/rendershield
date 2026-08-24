@@ -62,7 +62,7 @@ describe("package identity (packaging compatibility)", () => {
       bin: Record<string, string>;
     };
     expect(pkg.name).toBe("@lownoise-studio/rendershield");
-    expect(pkg.version).toBe("1.1.1");
+    expect(pkg.version).toBe("1.2.0");
     expect(pkg.bin.rendershield).toBe("dist/cli.js");
   });
 });

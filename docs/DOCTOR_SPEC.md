@@ -316,4 +316,4 @@ rendershield verify --prod <url>
 
 ## 17. Verdict
 
-**Doctor v1 complete** — S1–S6 are implemented, tested, documented, and verified in CI. Remaining release actions (version bump, npm publish, GitHub Release) are outside S6.
+**Doctor v1 complete** — S1–S6 are implemented, tested, documented, and verified in CI. Package release versioning is tracked separately (see `CHANGELOG.md`).
