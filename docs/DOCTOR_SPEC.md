@@ -1,0 +1,284 @@
+# DOCTOR_SPEC.md — `rendershield doctor`
+
+> **Status: Proposed — not yet implemented**  
+> This document describes the planned offline `rendershield doctor` command.  
+> RenderShield Prerender does **not** ship `doctor` today. Implementation will follow the slices below; S1 (shared Markdown primitives) is the first prerequisite.
+
+**Target package:** `@lownoise-studio/rendershield` (RenderShield Prerender)  
+**Scope (v1):** Offline diagnostics only  
+
+---
+
+## 1. Architecture fit
+
+`rendershield doctor` will be a **fourth CLI command** alongside `init`, `build`, and `verify`. v1 is **offline and read-only**: it inspects Prerender config, Markdown sources, and existing generated artifacts. It does **not** replace `verify --prod`.
+
+| Existing piece | How doctor will use it |
+|----------------|------------------------|
+| `extractGlobalOptions()` + `--config` | Global config path |
+| `loadConfig()` | Config discovery and runtime validation |
+| Shared Markdown primitives in `src/core/markdownContent.ts` | Collection discovery, single-file parse, route construction — **shared with build** |
+| Internal `validateOutputPath()` | Output-path safety (read-only call; **not** exported) |
+| Internal `listPrerenderIndexFiles()` / `indexHtmlPathToRoute()` | Built route discovery (**not** exported) |
+| `checkPrerenderContract()` | Crawler HTML-contract checks on built files |
+| `generateSitemapXml()` / `generateRobotsTxt()` / `generateWorkerJs()` | Expected artifact comparison (string-level, no execution) |
+
+**Planned insertion points:**
+
+- `src/commands/doctor.ts` — `cmdDoctor(cwd, options)` *(not implemented)*
+- `src/cliArgs.ts` — `parseDoctorArgs()` with strict unknown-flag handling *(not implemented)*
+- `src/cli.ts` — dispatch + help *(not implemented)*
+- `src/index.ts` — export **only** `cmdDoctor` and Doctor public types *(not implemented)*
+
+---
+
+## 2. Purpose and non-goals
+
+### Purpose
+
+Provide a **single, offline, read-only health check** for a RenderShield Prerender project:
+
+- Config validity and coherence
+- Markdown inventory and frontmatter (via shared primitives)
+- Output path safety, presence, best-effort freshness
+- Crawler HTML-contract validity on generated pages
+- Sitemap / robots / Worker **config + generated artifact** consistency
+
+### Non-goals (v1)
+
+| Non-goal | Rationale |
+|----------|-----------|
+| `--prod` / production network checks | `verify --prod` remains authoritative |
+| SPA-shell heuristics | Prod/human-response concern; belongs with verify |
+| Import or inspect React / JSX / TSX | RenderShield React boundary |
+| Read RenderShield React config | Separate product |
+| Execute / render the SPA or run a browser | Framework-neutral, offline |
+| Modify config, Markdown, or output | Read-only |
+| Run `build` or `fs.remove(outDir)` | Destructive |
+| Parallel Markdown / frontmatter parser | Must reuse shared primitives with build |
+| Export path-safety / route-listing helpers | Keep internal |
+| Inspect Wrangler / Cloudflare / other provider configs | Out of scope |
+| Hosted service or paid-gated diagnostics | Full local diagnostics + JSON stay in open-source CLI |
+| Hash-based freshness / build manifest | Deferred |
+
+---
+
+## 3. CLI syntax and flags (planned)
+
+```
+rendershield [--config <path>] doctor [options]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--config <path>` | Global; default `rendershield.config.json` |
+| `--json` | Machine-readable JSON on stdout |
+| `--strict` | Treat **WARNING** as failure for exit code |
+| `--skip-output` | Skip checks requiring `outDir` |
+| `-h`, `--help` | Doctor help |
+
+**Not in v1:** `--prod`, `--prod --all`, production phases, SPA-shell diagnostics.
+
+### Flag errors → `CLI_INVALID_ARGS`, exit **2**
+
+Unknown flags, missing option values, and unexpected positional args must throw `CLI_INVALID_ARGS` and exit **2**.
+
+---
+
+## 4. Read-only guarantees
+
+Doctor **may read:** config, Markdown under `content.markdown.baseDir`, files under `output.outDir` (when not `--skip-output`).
+
+Doctor **must not:** write/delete files, invoke build/init, network fetch, spawn browsers, read Wrangler/provider config, import React.
+
+**Acceptance test (planned):** before/after file-tree snapshot with content hashes; any change fails.
+
+---
+
+## 5. Shared Markdown primitives (required — S1)
+
+Doctor **must not** reimplement Markdown discovery, frontmatter parsing, or route construction.
+
+| Primitive | Module | Responsibility |
+|-----------|--------|----------------|
+| `discoverCollectionFiles` | `src/core/markdownContent.ts` | Glob under `baseDir` + collection `pattern` |
+| `parseMarkdownFile` | `src/core/markdownContent.ts` | Frontmatter validation + HTML render |
+| `buildRoutePath` | `src/core/markdownContent.ts` | `routeBase` + `slug` → `routePath` |
+
+`loadAllMarkdownDocs` (and **build**) consume these primitives. Primitives are **internal** — not exported from the package root.
+
+---
+
+## 6. Diagnostic execution order (offline only)
+
+```
+Phase 1  Config discovery & load
+Phase 2  Output path safety (non-destructive, internal helper)
+Phase 3  Markdown source inventory (shared primitives)
+Phase 4  Content semantics (routes, duplicates, globs)
+Phase 5  Site / origin / Worker config coherence
+Phase 6  Generated output presence
+Phase 7  Source ↔ output freshness (best-effort mtime WARN only)
+Phase 8  Crawler HTML contract (built files)
+Phase 9  Sitemap & robots consistency (generated artifacts)
+Phase 10 Worker rewrite coverage + generated worker.js consistency
+```
+
+---
+
+## 7. Diagnostic catalog (summary)
+
+Stable codes use prefix `DOCTOR_`. Severity: **PASS**, **WARNING**, **FAIL**.
+
+Key areas:
+
+- **Config:** `DOCTOR_CONFIG_FOUND`, `DOCTOR_CONFIG_MISSING`, `DOCTOR_CONFIG_INVALID`, `DOCTOR_CONFIG_DEPRECATED_FIELD`
+- **Output path:** `DOCTOR_OUTPUT_PATH_SAFE`, `DOCTOR_OUTPUT_PATH_UNSAFE`
+- **Content:** `DOCTOR_CONTENT_*`, `DOCTOR_ROUTE_*`
+- **Canonical/origin:** `DOCTOR_CANONICAL_*`, `DOCTOR_SPA_ORIGIN_*`, `DOCTOR_ORIGIN_HOST_MISMATCH`
+- **Output:** `DOCTOR_OUTPUT_*`, `DOCTOR_ARTIFACT_*`
+- **Freshness:** `DOCTOR_FRESHNESS_STALE` (WARN, best-effort mtime), `DOCTOR_FRESHNESS_CURRENT`
+- **Contract:** `DOCTOR_CONTRACT_*`, `DOCTOR_CANONICAL_HREF_MISMATCH`, `DOCTOR_JSONLD_TYPE_MISMATCH`
+- **Artifacts:** `DOCTOR_SITEMAP_*`, `DOCTOR_ROBOTS_*`
+- **Worker:** `DOCTOR_WORKER_*`
+
+> mtime freshness is a **best-effort warning**, not deterministic proof. Hash-based freshness is **deferred**.
+
+Full code list and phase details: see implementation PRs following S2–S6.
+
+---
+
+## 8. Severity and exit codes
+
+| Exit | Meaning |
+|------|---------|
+| **0** | No FAIL (and no WARN if `--strict`) |
+| **1** | One or more FAIL (or WARN with `--strict`) |
+| **2** | `CLI_INVALID_ARGS` |
+
+---
+
+## 9. Human-readable output
+
+Version string from package metadata (`{VERSION}` placeholder), never hardcoded in formatter.
+
+```
+RenderShield doctor v{VERSION}
+
+Config: rendershield.config.json
+Output: dist-prerender/ (12 pages)
+
+  PASS   DOCTOR_CONFIG_FOUND              Configuration loaded
+  WARN   DOCTOR_FRESHNESS_STALE          /blog/post-a: source mtime newer than built HTML (best-effort)
+
+Summary: 18 pass, 4 warn, 2 fail
+Doctor: FAIL — fix 2 issue(s) before release.
+```
+
+---
+
+## 10. Machine-readable `--json` output
+
+Complete JSON results available in the **open-source CLI** — no hosted service required.
+
+```json
+{
+  "version": "{VERSION}",
+  "command": "doctor",
+  "ok": false,
+  "strict": false,
+  "configPath": "rendershield.config.json",
+  "summary": { "pass": 18, "warning": 4, "fail": 2 },
+  "diagnostics": []
+}
+```
+
+---
+
+## 11. Programmatic API (planned public surface)
+
+**Allowed new exports:** `cmdDoctor`, Doctor types only.
+
+**Not exported:** path-safety, route listing, Markdown primitives, freshness helpers.
+
+---
+
+## 12. Behavior before and after build
+
+| State | Behavior |
+|-------|----------|
+| No config | FAIL `DOCTOR_CONFIG_MISSING` |
+| Config + content, pre-build | WARN `DOCTOR_OUTPUT_MISSING` |
+| Post-build | Output + contract + artifacts checks |
+| `--skip-output` | Phases 1–5 only |
+
+Recommended flow:
+
+```
+rendershield doctor
+rendershield build
+rendershield doctor
+rendershield verify --prod <url>
+```
+
+---
+
+## 13. Implementation slices
+
+| Slice | Scope | Status |
+|-------|-------|--------|
+| **S1** | Extract shared Markdown primitives; refactor `loadAllMarkdownDocs`; parity tests | **In progress / prerequisite** |
+| **S2** | `cmdDoctor` orchestrator, types, severity/exit summary | Not started |
+| **S3** | Phases 1–5 | Not started |
+| **S4** | Phases 6–10 | Not started |
+| **S5** | CLI dispatch, `parseDoctorArgs`, human + `--json` formatters | Not started |
+| **S6** | Tests (hash tree snapshot), public-api/packaging, user-facing docs | Not started |
+
+---
+
+## 14. Acceptance criteria (offline v1)
+
+1. After build, `doctor` exits 0 with no FAIL on valid fixture.
+2. Pre-build valid project exits 0 with WARN-only for missing output.
+3. Duplicate slug → FAIL, exit 1.
+4. Unknown flags → `CLI_INVALID_ARGS`, exit **2**.
+5. `--json` includes all FAIL/WARN; `version` from package metadata.
+6. Read-only: before/after file-tree + content hashes unchanged.
+7. Build and doctor share Markdown primitives.
+8. Public API adds only `cmdDoctor` + Doctor types.
+9. No React imports; no network in v1.
+
+---
+
+## 15. RenderShield React boundary
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Same website                           │
+├──────────────────────────┬──────────────────────────────────┤
+│  RenderShield Prerender  │  RenderShield React                │
+│  rendershield doctor     │  (separate tooling)                │
+│  Markdown → static HTML  │  Framework-aware concerns          │
+├──────────────────────────┴──────────────────────────────────┤
+│  Coexistence docs OK. NO shared implementation dependency.   │
+│  Doctor: no React imports, source inspection, or React cfg.  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 16. Deferred work
+
+| Item | Status |
+|------|--------|
+| Production / `--prod` / SPA-shell | Use `verify --prod` |
+| Hash-based freshness / build manifest | Deferred |
+| Runtime JSON Schema (`ajv`) | Deferred |
+| Wrangler / provider config inspection | Deferred |
+| `doctor --fix` | Deferred |
+
+---
+
+## 17. Verdict
+
+**READY_TO_IMPLEMENT** — offline v1 is supported once S1 (shared Markdown primitives) and subsequent slices land. S1 does not ship `doctor`; it prepares internal reuse for S2+.
