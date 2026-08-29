@@ -30,13 +30,15 @@ JSON Schema: [`rendershield.config.schema.json`](../rendershield.config.schema.j
 | Field | Description |
 |-------|-------------|
 | `name` | Collection id (used internally). |
-| `pattern` | Glob under `baseDir`, e.g. `blog/**/*.md`. |
+| `pattern` | Glob under `baseDir`, e.g. `blog/**/*.md`. Max 256 characters; no control characters; extglob syntax (`+(…)`, `*(…)`, etc.) is rejected. |
 | `routeBase` | URL prefix, e.g. `/blog`. |
 | `schemaType` | JSON-LD `@type`: `Article` (default), `BlogPosting`, or `WebPage`. |
 
 ### Markdown frontmatter (per file)
 
 Required: `title`, `excerpt`, `datePublished` (`YYYY-MM-DD`), `coverImage`, `slug`.
+
+Frontmatter must be **data-only YAML**. Prefer a plain `---` opener; `---yaml` and `---yml` are also accepted. Executable or alternate tags such as `---js`, `---javascript`, and `---json` are rejected.
 
 Route: `{routeBase}/{slug}` → `dist-prerender/.../index.html`.
 

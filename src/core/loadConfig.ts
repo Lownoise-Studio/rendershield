@@ -3,6 +3,7 @@ import path from "node:path";
 import { RenderShieldConfig, SCHEMA_TYPES, type SchemaType } from "../types.js";
 import { renderShieldError } from "../errors.js";
 import { validateRouteBase } from "./routePathSafety.js";
+import { validateCollectionPattern } from "./collectionPatternSafety.js";
 import {
   readArtifactPathConfig,
   resolveArtifactPathInOutDir,
@@ -261,7 +262,7 @@ function normalizeCollections(collections: unknown[]): RenderShieldConfig["conte
         `content.markdown.collections[${index}].name must be a non-empty string`
       );
     }
-    if (typeof pattern !== "string" || pattern.trim() === "") {
+    if (typeof pattern !== "string") {
       throw renderShieldError(
         "CONFIG_INVALID",
         `content.markdown.collections[${index}].pattern must be a non-empty string`
@@ -274,6 +275,8 @@ function normalizeCollections(collections: unknown[]): RenderShieldConfig["conte
       );
     }
 
+    const patternField = `content.markdown.collections[${index}].pattern`;
+    const normalizedPattern = validateCollectionPattern(pattern, patternField);
     const routeBaseField = `content.markdown.collections[${index}].routeBase`;
     const normalizedRouteBase = validateRouteBase(routeBase.trim(), routeBaseField);
 
@@ -282,7 +285,7 @@ function normalizeCollections(collections: unknown[]): RenderShieldConfig["conte
 
     return {
       name: name.trim(),
-      pattern: pattern.trim(),
+      pattern: normalizedPattern,
       routeBase: normalizedRouteBase,
       schemaType,
     };

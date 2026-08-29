@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Replace `gray-matter` with a YAML-only frontmatter parser (`js-yaml` DEFAULT_SCHEMA) so JavaScript/eval frontmatter engines are not present or reachable.
+- Bound Markdown collection globs: max length, no control characters, no extglob syntax; disable fast-glob `extglob` / `braceExpansion` for collection discovery. Keep `picomatch@2.3.2` override (patched ReDoS line for micromatch).
+
 ## [1.2.1] - 2026-08-29
 
 ### Security

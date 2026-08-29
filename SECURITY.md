@@ -23,3 +23,8 @@ We aim to acknowledge reports within **5 business days** and will coordinate dis
 ## Scope notes
 
 RenderShield generates static HTML and an optional Cloudflare Worker template. Deployment, DNS, TLS, and Worker binding configuration are the operator's responsibility. Security issues in generated Worker routing logic or path-safety checks in the build command are in scope for this project.
+
+## Content and configuration boundaries
+
+- Markdown frontmatter is **data-only YAML**. Plain `---` openers are preferred; `---yaml` and `---yml` are also accepted. Executable or alternate tags such as `---js`, `---javascript`, and `---json` are rejected. RenderShield does not execute JavaScript frontmatter.
+- Collection `pattern` values are developer-configured globs. RenderShield bounds pattern length, rejects control characters and extglob syntax, and disables fast-glob extglob/brace expansion for collection discovery.
