@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-08-29
+
 ### Security
 
 - Content-route path traversal hardening: validate `slug` / `routeBase` / `routePath` segments (reject `.`, `..`, NUL, backslashes) and enforce filesystem containment under `output.outDir` at the page write boundary. Doctor route resolution uses the same primitive and will not probe escaped paths.
