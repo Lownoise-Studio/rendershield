@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import path from "node:path";
 import { loadConfig } from "../core/loadConfig.js";
-import { loadAllMarkdownDocsWithProvenance } from "../core/loadMarkdown.js";
+import { loadAllMarkdownDocsWithProvenance, assertUniqueContentRoutes } from "../core/loadMarkdown.js";
 import { renderPageHtml } from "../core/renderHtml.js";
 import { generateSitemapXml } from "../core/generateSitemap.js";
 import { generateRobotsTxt } from "../core/generateRobots.js";
@@ -41,6 +41,9 @@ export async function cmdBuild(cwd = process.cwd(), options?: CommandOptions) {
       "No markdown documents found. Check content paths/patterns."
     );
   }
+
+  // 1:1 route → page before any page writes (manifest integrity)
+  assertUniqueContentRoutes(docs);
 
   const pageEntries: BuildManifestPageEntry[] = [];
 

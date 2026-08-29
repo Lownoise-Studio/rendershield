@@ -1,17 +1,33 @@
 import fs from "fs-extra";
 import path from "node:path";
 import { getPackageIdentity } from "./packageIdentity.js";
-import { resolveArtifactPathInOutDir } from "./artifactPathSafety.js";
+import {
+  resolveArtifactPathInOutDir,
+  validateArtifactPathFormat,
+} from "./artifactPathSafety.js";
 import { renderShieldError } from "../errors.js";
 import { sha256Utf8 } from "./sha256.js";
+import type { RenderShieldConfig } from "../types.js";
 
 export { sha256Utf8 } from "./sha256.js";
 
 /** Fixed filename written at the output directory root. */
 export const BUILD_MANIFEST_FILENAME = "rendershield-manifest.json";
 
+/** Temp filename used for atomic rename (must stay under outDir). */
+export const BUILD_MANIFEST_TMP_FILENAME = `.${BUILD_MANIFEST_FILENAME}.tmp`;
+
 /** Site-relative artifact path used with resolveArtifactPathInOutDir. */
 export const BUILD_MANIFEST_ARTIFACT_PATH = `/${BUILD_MANIFEST_FILENAME}`;
+
+/** Site-relative temp path reserved alongside the final manifest. */
+export const BUILD_MANIFEST_TMP_ARTIFACT_PATH = `/${BUILD_MANIFEST_TMP_FILENAME}`;
+
+/** Configurable artifact paths must not collide with these reserved values. */
+export const RESERVED_BUILD_MANIFEST_ARTIFACT_PATHS = [
+  BUILD_MANIFEST_ARTIFACT_PATH,
+  BUILD_MANIFEST_TMP_ARTIFACT_PATH,
+] as const;
 
 export const BUILD_MANIFEST_VERSION = 1 as const;
 
@@ -42,6 +58,41 @@ export type BuildManifestPageInput = {
   /** Absolute path of the written index.html. */
   outputPathAbs: string;
 };
+
+/**
+ * Locale-independent string ordering using ordinary JS code-unit comparison.
+ * Avoids ICU / runtime-locale variance from String.prototype.localeCompare.
+ */
+export function compareStringsCodeUnit(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * Reject sitemap/robots (or other) artifact paths that would overwrite the
+ * reserved build-manifest final or temp filenames.
+ */
+export function assertArtifactPathDoesNotCollideWithManifest(
+  fieldName: string,
+  artifactPath: string
+): void {
+  const normalized = validateArtifactPathFormat(artifactPath, fieldName);
+  for (const reserved of RESERVED_BUILD_MANIFEST_ARTIFACT_PATHS) {
+    if (normalized === reserved) {
+      throw renderShieldError(
+        "CONFIG_INVALID",
+        `${fieldName} collides with reserved build manifest path "${reserved}"`
+      );
+    }
+  }
+}
+
+/** Fail closed if config artifact paths collide with reserved manifest paths. */
+export function assertConfigDoesNotCollideWithBuildManifest(
+  cfg: RenderShieldConfig
+): void {
+  assertArtifactPathDoesNotCollideWithManifest("sitemap.path", cfg.sitemap.path);
+  assertArtifactPathDoesNotCollideWithManifest("robots.path", cfg.robots.path);
+}
 
 /** Normalize a filesystem path to a portable `/`-separated relative path. */
 export function toPosixRelative(relativePath: string): string {
@@ -111,7 +162,9 @@ export function createBuildManifestV1(
   pages: BuildManifestPageEntry[]
 ): BuildManifestV1 {
   const identity = getPackageIdentity();
-  const sorted = [...pages].sort((a, b) => a.route.localeCompare(b.route));
+  const sorted = [...pages].sort((a, b) =>
+    compareStringsCodeUnit(a.route, b.route)
+  );
   return {
     manifestVersion: BUILD_MANIFEST_VERSION,
     generator: {
@@ -140,10 +193,7 @@ export async function writeBuildManifestAtomic(
     BUILD_MANIFEST_ARTIFACT_PATH,
     "build.manifest"
   );
-  const tmpAbs = path.join(
-    path.dirname(finalAbs),
-    `.${BUILD_MANIFEST_FILENAME}.tmp`
-  );
+  const tmpAbs = path.join(path.dirname(finalAbs), BUILD_MANIFEST_TMP_FILENAME);
 
   // Containment: temp must stay beside the resolved final path under outDir.
   const tmpRel = path.relative(outDirAbs, tmpAbs);

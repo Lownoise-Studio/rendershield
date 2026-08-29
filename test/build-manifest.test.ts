@@ -8,9 +8,14 @@ import { cmdBuild } from "../dist/commands/build.js";
 import {
   BUILD_MANIFEST_FILENAME,
   BUILD_MANIFEST_VERSION,
+  BUILD_MANIFEST_ARTIFACT_PATH,
+  BUILD_MANIFEST_TMP_ARTIFACT_PATH,
+  compareStringsCodeUnit,
+  createBuildManifestV1,
   sha256Utf8,
 } from "../dist/core/buildManifest.js";
 import { getPackageIdentity } from "../dist/core/packageIdentity.js";
+import { loadConfig } from "../dist/core/loadConfig.js";
 import { isRenderShieldError } from "../dist/errors.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,7 +38,14 @@ type ManifestV1 = {
 
 async function writeProject(
   root: string,
-  opts?: { slug?: string; title?: string; body?: string; badFrontmatter?: boolean }
+  opts?: {
+    slug?: string;
+    title?: string;
+    body?: string;
+    badFrontmatter?: boolean;
+    sitemapPath?: string;
+    robotsPath?: string;
+  }
 ): Promise<void> {
   const slug = opts?.slug ?? "alpha";
   const title = opts?.title ?? "Alpha Post";
@@ -65,8 +77,14 @@ async function writeProject(
         },
       },
       output: { outDir: "dist-prerender", prettyHtml: true },
-      sitemap: { enabled: true, path: "/sitemap.xml" },
-      robots: { enabled: true, path: "/robots.txt" },
+      sitemap: {
+        enabled: true,
+        path: opts?.sitemapPath ?? "/sitemap.xml",
+      },
+      robots: {
+        enabled: true,
+        path: opts?.robotsPath ?? "/robots.txt",
+      },
       worker: { enabled: false },
     }),
     "utf8"
@@ -392,5 +410,121 @@ Body
     await expect(
       fs.pathExists(path.join(tmpDir, "dist-prerender", BUILD_MANIFEST_FILENAME))
     ).resolves.toBe(false);
+  });
+
+  it("rejects sitemap.path colliding with reserved manifest path before generation", async () => {
+    await writeProject(tmpDir, {
+      slug: "ok",
+      sitemapPath: BUILD_MANIFEST_ARTIFACT_PATH,
+    });
+
+    try {
+      await loadConfig(tmpDir);
+      expect.unreachable("expected CONFIG_INVALID");
+    } catch (err) {
+      expect(isRenderShieldError(err)).toBe(true);
+      if (isRenderShieldError(err)) {
+        expect(err.code).toBe("CONFIG_INVALID");
+        expect(err.message).toMatch(/reserved build manifest path/);
+        expect(err.message).toContain(BUILD_MANIFEST_ARTIFACT_PATH);
+      }
+    }
+
+    try {
+      await cmdBuild(tmpDir);
+      expect.unreachable("expected build failure");
+    } catch (err) {
+      expect(isRenderShieldError(err)).toBe(true);
+    }
+
+    await expect(
+      fs.pathExists(path.join(tmpDir, "dist-prerender", BUILD_MANIFEST_FILENAME))
+    ).resolves.toBe(false);
+    await expect(
+      fs.pathExists(path.join(tmpDir, "dist-prerender", "blog", "ok", "index.html"))
+    ).resolves.toBe(false);
+  });
+
+  it("rejects robots.path colliding with reserved manifest temp path before generation", async () => {
+    await writeProject(tmpDir, {
+      slug: "ok",
+      robotsPath: BUILD_MANIFEST_TMP_ARTIFACT_PATH,
+    });
+
+    try {
+      await loadConfig(tmpDir);
+      expect.unreachable("expected CONFIG_INVALID");
+    } catch (err) {
+      expect(isRenderShieldError(err)).toBe(true);
+      if (isRenderShieldError(err)) {
+        expect(err.code).toBe("CONFIG_INVALID");
+        expect(err.message).toContain(BUILD_MANIFEST_TMP_ARTIFACT_PATH);
+      }
+    }
+  });
+
+  it("rejects duplicate routes before writing pages or a success manifest", async () => {
+    await writeProject(tmpDir, { slug: "shared" });
+    await fs.writeFile(
+      path.join(tmpDir, "content", "blog", "shared-again.md"),
+      `---
+title: Shared Again
+excerpt: Second source with the same slug as another file for duplicate route coverage.
+datePublished: 2025-01-02
+coverImage: /images/shared-again.jpg
+slug: shared
+---
+
+Second body with enough words and characters to satisfy the prerender article contract.
+`,
+      "utf8"
+    );
+
+    try {
+      await cmdBuild(tmpDir);
+      expect.unreachable("expected BUILD_FAILED for duplicate route");
+    } catch (err) {
+      expect(isRenderShieldError(err)).toBe(true);
+      if (isRenderShieldError(err)) {
+        expect(err.code).toBe("BUILD_FAILED");
+        expect(err.message).toMatch(/Duplicate content route "\/blog\/shared"/);
+      }
+    }
+
+    await expect(
+      fs.pathExists(path.join(tmpDir, "dist-prerender", BUILD_MANIFEST_FILENAME))
+    ).resolves.toBe(false);
+    await expect(
+      fs.pathExists(
+        path.join(tmpDir, "dist-prerender", "blog", "shared", "index.html")
+      )
+    ).resolves.toBe(false);
+  });
+
+  it("orders non-ASCII routes with locale-independent code-unit comparison", () => {
+    // Code-unit order: "Z" (90) < "a" (97) < "ö" (0xF6).
+    expect(compareStringsCodeUnit("/blog/Z", "/blog/a")).toBe(-1);
+    expect(compareStringsCodeUnit("/blog/a", "/blog/ö")).toBe(-1);
+    expect(compareStringsCodeUnit("/blog/ö", "/blog/a")).toBe(1);
+
+    const stub = (route: string) => ({
+      route,
+      source: `content${route}.md`,
+      sourceSha256: "a".repeat(64),
+      output: `${route.slice(1)}/index.html`,
+      outputSha256: "b".repeat(64),
+    });
+
+    const manifest = createBuildManifestV1([
+      stub("/blog/ö"),
+      stub("/blog/a"),
+      stub("/blog/Z"),
+    ]);
+
+    expect(manifest.pages.map((p) => p.route)).toEqual([
+      "/blog/Z",
+      "/blog/a",
+      "/blog/ö",
+    ]);
   });
 });
