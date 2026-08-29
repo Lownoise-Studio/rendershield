@@ -38,7 +38,7 @@ JSON Schema: [`rendershield.config.schema.json`](../rendershield.config.schema.j
 
 Required: `title`, `excerpt`, `datePublished` (`YYYY-MM-DD`), `coverImage`, `slug`.
 
-Frontmatter must be **data-only YAML** between `---` delimiters. JavaScript / JSON language-tagged frontmatter is not supported and is rejected.
+Frontmatter must be **data-only YAML**. Prefer a plain `---` opener; `---yaml` and `---yml` are also accepted. Executable or alternate tags such as `---js`, `---javascript`, and `---json` are rejected.
 
 Route: `{routeBase}/{slug}` → `dist-prerender/.../index.html`.
 

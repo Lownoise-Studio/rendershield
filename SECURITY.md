@@ -26,5 +26,5 @@ RenderShield generates static HTML and an optional Cloudflare Worker template. D
 
 ## Content and configuration boundaries
 
-- Markdown frontmatter is **data-only YAML** delimited by `---`. RenderShield does **not** execute JavaScript frontmatter (including language-tagged forms such as `---js` / `---javascript`).
+- Markdown frontmatter is **data-only YAML**. Plain `---` openers are preferred; `---yaml` and `---yml` are also accepted. Executable or alternate tags such as `---js`, `---javascript`, and `---json` are rejected. RenderShield does not execute JavaScript frontmatter.
 - Collection `pattern` values are developer-configured globs. RenderShield bounds pattern length, rejects control characters and extglob syntax, and disables fast-glob extglob/brace expansion for collection discovery.
