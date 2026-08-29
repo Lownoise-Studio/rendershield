@@ -1,6 +1,7 @@
 import fs from "fs-extra";
 import path from "node:path";
 import { resolveArtifactPathInOutDir } from "../../core/artifactPathSafety.js";
+import { resolveRouteIndexHtmlInOutDir } from "../../core/routePathSafety.js";
 import { validateOutputPath } from "../../core/outputPathSafety.js";
 import {
   indexHtmlPathToRoute,
@@ -31,9 +32,20 @@ async function resolveSafeOutDirAbs(ctx: DoctorPhaseContext): Promise<string | n
   return path.join(ctx.cwd, ctx.config.output.outDir);
 }
 
-function routeToIndexHtmlPath(outDirAbs: string, routePath: string): string {
-  const clean = routePath.replace(/^\//, "");
-  return path.join(outDirAbs, clean, "index.html");
+/**
+ * Resolve a content route to index.html under outDir, or null when the route
+ * would escape outDir (never probe escaped filesystem paths).
+ */
+function tryRouteToIndexHtmlPath(outDirAbs: string, routePath: string): string | null {
+  try {
+    return resolveRouteIndexHtmlInOutDir(outDirAbs, routePath);
+  } catch (err: unknown) {
+    const rsErr = asRenderShieldError(err);
+    if (rsErr?.code === "OUTPUT_PATH_UNSAFE" || rsErr?.code === "CONTENT_INVALID") {
+      return null;
+    }
+    throw err;
+  }
 }
 
 function normalizeText(value: string): string {
@@ -131,6 +143,20 @@ export async function runOutputPresencePhase(
   const orphanRoutes = builtRoutes.filter((routePath) => !expectedSet.has(routePath));
 
   for (const routePath of missingRoutes) {
+    const expectedIndexHtml = tryRouteToIndexHtmlPath(outDirAbs, routePath);
+    if (expectedIndexHtml === null) {
+      collector.fail(
+        "outputPresence",
+        "DOCTOR_OUTPUT_ROUTE_MISSING",
+        "output",
+        `Missing built page for unsafe route ${routePath} (refusing to resolve outside output.outDir)`,
+        {
+          hint: "Fix slug/routeBase so the route stays under output.outDir, then rebuild.",
+          details: { routePath, escaped: true },
+        }
+      );
+      continue;
+    }
     collector.fail(
       "outputPresence",
       "DOCTOR_OUTPUT_ROUTE_MISSING",
@@ -140,7 +166,7 @@ export async function runOutputPresencePhase(
         hint: "Run rendershield build or check that the route was generated.",
         details: {
           routePath,
-          expectedIndexHtml: routeToIndexHtmlPath(outDirAbs, routePath),
+          expectedIndexHtml,
         },
       }
     );
@@ -187,7 +213,8 @@ export async function runFreshnessPhase(
   const currentRoutes: string[] = [];
 
   for (const doc of ctx.docs) {
-    const htmlPath = routeToIndexHtmlPath(ctx.outDirAbs, doc.routePath);
+    const htmlPath = tryRouteToIndexHtmlPath(ctx.outDirAbs, doc.routePath);
+    if (htmlPath === null) continue;
     if (!(await fs.pathExists(htmlPath))) continue;
 
     const sourceStat = await fs.stat(doc.sourcePath);
@@ -241,7 +268,8 @@ export async function runContractPhase(
   if (!canRunOutputPhases(ctx) || !ctx.config || !ctx.outDirAbs) return;
 
   for (const doc of ctx.docs) {
-    const htmlPath = routeToIndexHtmlPath(ctx.outDirAbs, doc.routePath);
+    const htmlPath = tryRouteToIndexHtmlPath(ctx.outDirAbs, doc.routePath);
+    if (htmlPath === null) continue;
     if (!(await fs.pathExists(htmlPath))) continue;
 
     const html = await fs.readFile(htmlPath, "utf8");

@@ -9,14 +9,9 @@ import { generateWorkerJs } from "../core/generateWorker.js";
 import { validatePrerenderHtml } from "../core/validateOutput.js";
 import { validateOutputPath } from "../core/outputPathSafety.js";
 import { resolveArtifactPathInOutDir } from "../core/artifactPathSafety.js";
+import { resolveRoutePageDirInOutDir } from "../core/routePathSafety.js";
 import { renderShieldError } from "../errors.js";
 import type { CommandOptions } from "../configPath.js";
-
-function routeToOutDir(outDirAbs: string, routePath: string): string {
-  // /blog/slug -> outDir/blog/slug/index.html
-  const clean = routePath.replace(/^\//, "");
-  return path.join(outDirAbs, clean);
-}
 
 export async function cmdBuild(cwd = process.cwd(), options?: CommandOptions) {
   const cfg = await loadConfig(cwd, options);
@@ -39,9 +34,9 @@ export async function cmdBuild(cwd = process.cwd(), options?: CommandOptions) {
     );
   }
 
-  // Generate pages (validate BEFORE writing)
+  // Generate pages (containment enforced at write boundary; validate BEFORE writing)
   for (const doc of docs) {
-    const pageDir = routeToOutDir(outDirAbs, doc.routePath);
+    const pageDir = resolveRoutePageDirInOutDir(outDirAbs, doc.routePath);
     await fs.ensureDir(pageDir);
 
     const outFile = path.join(pageDir, "index.html");

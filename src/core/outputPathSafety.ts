@@ -1,6 +1,7 @@
 import fs from "fs-extra";
 import path from "node:path";
 import { renderShieldError } from "../errors.js";
+import { isOutsideBase } from "./pathContainment.js";
 
 /**
  * Validates output path before any destructive operation (fs.remove).
@@ -20,12 +21,14 @@ export async function validateOutputPath(outDir: string, cwd: string): Promise<v
     );
   }
 
-  const outDirAbs = path.resolve(cwdAbs, outDir);
+  // Resolve against the realpath'd project root so macOS /var → /private/var (and
+  // similar symlink roots) do not false-positive as path traversal.
+  const outDirAbs = path.resolve(cwdReal, outDir);
   const normalizedCwd = path.normalize(cwdReal);
   const normalizedOut = path.normalize(outDirAbs);
 
   const relative = path.relative(normalizedCwd, normalizedOut);
-  if (relative.startsWith("..") || relative === ".." || path.isAbsolute(relative)) {
+  if (isOutsideBase(relative)) {
     throw renderShieldError(
       "OUTPUT_PATH_UNSAFE",
       `Output directory "${outDir}" resolves outside project root. Use a relative path within the project.`
@@ -58,7 +61,7 @@ export async function validateOutputPath(outDir: string, cwd: string): Promise<v
     }
     const outDirRealNorm = path.normalize(outDirReal);
     const relativeReal = path.relative(normalizedCwd, outDirRealNorm);
-    if (relativeReal.startsWith("..") || relativeReal === ".." || path.isAbsolute(relativeReal)) {
+    if (isOutsideBase(relativeReal)) {
       throw renderShieldError(
         "OUTPUT_PATH_UNSAFE",
         `Output directory "${outDir}" resolves (via symlink) outside project root. Use a path that does not escape the project.`
@@ -84,7 +87,7 @@ export async function validateOutputPath(outDir: string, cwd: string): Promise<v
           );
         }
         const relParent = path.relative(normalizedCwd, parentRealNorm);
-        if (relParent.startsWith("..") || relParent === ".." || path.isAbsolute(relParent)) {
+        if (isOutsideBase(relParent)) {
           throw renderShieldError(
             "OUTPUT_PATH_UNSAFE",
             `Output directory "${outDir}" has a parent that resolves (via symlink) outside project root. Use a path that does not escape the project.`
