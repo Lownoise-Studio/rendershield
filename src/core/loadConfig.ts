@@ -8,6 +8,7 @@ import {
   readArtifactPathConfig,
   resolveArtifactPathInOutDir,
 } from "./artifactPathSafety.js";
+import { assertConfigDoesNotCollideWithBuildManifest } from "./buildManifest.js";
 import {
   resolveConfigFile,
   DEFAULT_CONFIG_NAME,
@@ -237,7 +238,9 @@ export async function loadConfig(
   await resolveArtifactPathInOutDir(outDirAbs, sitemapPath, "sitemap.path");
   await resolveArtifactPathInOutDir(outDirAbs, robotsPath, "robots.path");
 
-  return parsed as RenderShieldConfig;
+  const cfg = parsed as RenderShieldConfig;
+  assertConfigDoesNotCollideWithBuildManifest(cfg);
+  return cfg;
 }
 
 export { DEFAULT_CONFIG_NAME };

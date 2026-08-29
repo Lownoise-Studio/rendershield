@@ -5,6 +5,7 @@ import MarkdownIt from "markdown-it";
 import type { MarkdownDoc } from "../types.js";
 import { renderShieldError } from "../errors.js";
 import { parseYamlFrontmatter } from "./parseYamlFrontmatter.js";
+import { sha256Utf8 } from "./sha256.js";
 import {
   validateContentRoutePath,
   validateRouteSlug,
@@ -13,6 +14,13 @@ import {
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true });
 
 const REQUIRED_FIELDS = "title, excerpt, datePublished, coverImage, slug";
+
+/** Internal parse result: public MarkdownDoc plus provenance of the exact source read. */
+export type ParsedMarkdownWithProvenance = {
+  doc: MarkdownDoc;
+  /** SHA-256 of the exact UTF-8 source string used for parsing (including any BOM). */
+  sourceSha256: string;
+};
 
 function requireString(value: unknown, field: string, file: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -58,13 +66,17 @@ export function buildRoutePath(routeBase: string, slug: string): string {
   return `${base}/${slug}`;
 }
 
-/** Parse one Markdown file: frontmatter validation, route construction, HTML rendering. */
-export async function parseMarkdownFile(
+/**
+ * Parse Markdown from an already-read UTF-8 source string.
+ * Callers that need provenance must hash `raw` from the same string instance
+ * used here (see parseMarkdownFileWithProvenance).
+ */
+export function parseMarkdownFromRaw(
+  raw: string,
   absPath: string,
   collection: string,
   routeBase: string
-): Promise<MarkdownDoc> {
-  const raw = await fs.readFile(absPath, "utf8");
+): MarkdownDoc {
   const parsed = parseYamlFrontmatter(raw, absPath);
 
   const title = requireString(parsed.data.title, "title", absPath);
@@ -101,4 +113,29 @@ export async function parseMarkdownFile(
     slug,
     htmlContent,
   };
+}
+
+/**
+ * Read once, hash the exact UTF-8 bytes used for parsing, then parse.
+ * Internal provenance seam for deterministic build manifests.
+ */
+export async function parseMarkdownFileWithProvenance(
+  absPath: string,
+  collection: string,
+  routeBase: string
+): Promise<ParsedMarkdownWithProvenance> {
+  const raw = await fs.readFile(absPath, "utf8");
+  const sourceSha256 = sha256Utf8(raw);
+  const doc = parseMarkdownFromRaw(raw, absPath, collection, routeBase);
+  return { doc, sourceSha256 };
+}
+
+/** Parse one Markdown file: frontmatter validation, route construction, HTML rendering. */
+export async function parseMarkdownFile(
+  absPath: string,
+  collection: string,
+  routeBase: string
+): Promise<MarkdownDoc> {
+  return (await parseMarkdownFileWithProvenance(absPath, collection, routeBase))
+    .doc;
 }

@@ -26,9 +26,12 @@ dist-prerender/
 │ └─ index.html
 ├─ sitemap.xml
 ├─ robots.txt
-└─ worker.js
+├─ worker.js
+└─ rendershield-manifest.json
 
 The exact structure depends on your configured routes.
+
+`rendershield-manifest.json` is a local, versioned build provenance file. See the build manifest notes below.
 
 2. Hosting the prerendered output
 
@@ -183,3 +186,17 @@ The edge decides who gets what
 If it builds, it ships.
 
 That is the contract.
+
+## Build manifest (local provenance)
+
+Successful `rendershield build` writes `rendershield-manifest.json` at the root of `output.outDir`.
+
+| Field | Meaning |
+|-------|---------|
+| `manifestVersion` | Schema version. Currently `1`. Consumers should read this before relying on fields. |
+| `generator.name` / `generator.version` | npm package identity that produced the build |
+| `pages[]` | Deterministically ordered by `route` |
+| `pages[].source` / `pages[].output` | Project-relative and outDir-relative paths using `/` (never absolute, never cwd) |
+| `pages[].sourceSha256` / `pages[].outputSha256` | SHA-256 of source Markdown bytes and of the exact HTML written for that page |
+
+The manifest is local OSS build provenance for deterministic correctness. It does not include timestamps, random IDs, machine-specific paths, or environment secrets. Doctor still uses existing mtime-based freshness; hash/manifest-backed freshness is intentionally separate.

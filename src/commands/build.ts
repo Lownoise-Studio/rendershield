@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import path from "node:path";
 import { loadConfig } from "../core/loadConfig.js";
-import { loadAllMarkdownDocs } from "../core/loadMarkdown.js";
+import { loadAllMarkdownDocsWithProvenance, assertUniqueContentRoutes } from "../core/loadMarkdown.js";
 import { renderPageHtml } from "../core/renderHtml.js";
 import { generateSitemapXml } from "../core/generateSitemap.js";
 import { generateRobotsTxt } from "../core/generateRobots.js";
@@ -10,6 +10,13 @@ import { validatePrerenderHtml } from "../core/validateOutput.js";
 import { validateOutputPath } from "../core/outputPathSafety.js";
 import { resolveArtifactPathInOutDir } from "../core/artifactPathSafety.js";
 import { resolveRoutePageDirInOutDir } from "../core/routePathSafety.js";
+import {
+  BUILD_MANIFEST_FILENAME,
+  buildManifestPageEntry,
+  createBuildManifestV1,
+  writeBuildManifestAtomic,
+  type BuildManifestPageEntry,
+} from "../core/buildManifest.js";
 import { renderShieldError } from "../errors.js";
 import type { CommandOptions } from "../configPath.js";
 
@@ -25,7 +32,8 @@ export async function cmdBuild(cwd = process.cwd(), options?: CommandOptions) {
   await fs.remove(outDirAbs);
   await fs.ensureDir(outDirAbs);
 
-  const docs = await loadAllMarkdownDocs(cfg, cwd);
+  const parsedDocs = await loadAllMarkdownDocsWithProvenance(cfg, cwd);
+  const docs = parsedDocs.map((p) => p.doc);
 
   if (docs.length === 0) {
     throw renderShieldError(
@@ -34,8 +42,13 @@ export async function cmdBuild(cwd = process.cwd(), options?: CommandOptions) {
     );
   }
 
+  // 1:1 route → page before any page writes (manifest integrity)
+  assertUniqueContentRoutes(docs);
+
+  const pageEntries: BuildManifestPageEntry[] = [];
+
   // Generate pages (containment enforced at write boundary; validate BEFORE writing)
-  for (const doc of docs) {
+  for (const { doc, sourceSha256 } of parsedDocs) {
     const pageDir = resolveRoutePageDirInOutDir(outDirAbs, doc.routePath);
     await fs.ensureDir(pageDir);
 
@@ -50,6 +63,16 @@ export async function cmdBuild(cwd = process.cwd(), options?: CommandOptions) {
     });
 
     await fs.writeFile(outFile, html, "utf8");
+
+    pageEntries.push(
+      buildManifestPageEntry(cwd, outDirAbs, {
+        routePath: doc.routePath,
+        sourcePathAbs: doc.sourcePath,
+        sourceSha256,
+        html,
+        outputPathAbs: outFile,
+      })
+    );
   }
 
   // sitemap.xml
@@ -82,8 +105,12 @@ export async function cmdBuild(cwd = process.cwd(), options?: CommandOptions) {
     await fs.writeFile(path.join(outDirAbs, "worker.js"), workerJs, "utf8");
   }
 
+  // Deterministic local provenance (after successful page + artifact generation)
+  const manifest = createBuildManifestV1(pageEntries);
+  await writeBuildManifestAtomic(outDirAbs, manifest);
+
   console.log(`Built ${docs.length} pages into ${cfg.output.outDir}/`);
   console.log(
-    `Output includes: ${cfg.sitemap.enabled ? "sitemap.xml " : ""}${cfg.robots.enabled ? "robots.txt " : ""}${cfg.worker.enabled ? "worker.js" : ""}`
+    `Output includes: ${cfg.sitemap.enabled ? "sitemap.xml " : ""}${cfg.robots.enabled ? "robots.txt " : ""}${cfg.worker.enabled ? "worker.js " : ""}${BUILD_MANIFEST_FILENAME}`
   );
 }
