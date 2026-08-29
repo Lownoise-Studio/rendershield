@@ -7,14 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- Deterministic local build manifest (`rendershield-manifest.json`) written by `rendershield build`: `manifestVersion` 1, package generator identity, per-page route/source/output paths (relative, `/`-normalized), and SHA-256 hashes of source Markdown and generated HTML. Source hashes come from the same UTF-8 read used for parsing (no post-parse re-read). Reserved manifest paths cannot collide with `sitemap.path` / `robots.path`. Duplicate content routes fail the build. Route ordering uses locale-independent code-unit comparison. No timestamps or absolute paths. Doctor mtime freshness is unchanged (manifest-backed freshness is M2).
-
 ### Security
 
-- Replace `gray-matter` with a YAML-only frontmatter parser (`js-yaml` DEFAULT_SCHEMA) so JavaScript/eval frontmatter engines are not present or reachable.
-- Bound Markdown collection globs: max length, no control characters, no extglob syntax; disable fast-glob `extglob` / `braceExpansion` for collection discovery. Keep `picomatch@2.3.2` override (patched ReDoS line for micromatch).
+- Remove `gray-matter` and its JavaScript/eval-capable frontmatter engine from the dependency tree and parse path.
+- Parse Markdown frontmatter as data-only YAML via direct `js-yaml` (`DEFAULT_SCHEMA`); reject executable/alternate openers such as `---js`, `---javascript`, and `---json` (plain `---` preferred; `---yaml` / `---yml` accepted). Preserve leading UTF-8 BOM compatibility.
+- Harden Markdown collection globs: max pattern length, reject control characters and extglob syntax; disable fast-glob `extglob` / `braceExpansion` for collection discovery. Keep `picomatch@2.3.2` override (patched ReDoS line for micromatch).
+- Dependency hygiene from the Socket-driven hardening pass: direct `js-yaml@4.3.2`; remove obsolete `js-yaml` override used only for transitive gray-matter.
 
 ## [1.2.1] - 2026-08-29
 
