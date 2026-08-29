@@ -292,6 +292,10 @@ Exported commands, config loaders, HTML renderer, contract validators, artifact 
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup.
 
+### Architecture
+
+Proposed open-source / commercial boundary (policy only): [docs/OPEN_SOURCE_BOUNDARY.md](docs/OPEN_SOURCE_BOUNDARY.md).
+
 ---
 
 ## Deployment
