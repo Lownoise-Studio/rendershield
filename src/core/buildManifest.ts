@@ -1,9 +1,11 @@
-import { createHash } from "node:crypto";
 import fs from "fs-extra";
 import path from "node:path";
 import { getPackageIdentity } from "./packageIdentity.js";
 import { resolveArtifactPathInOutDir } from "./artifactPathSafety.js";
 import { renderShieldError } from "../errors.js";
+import { sha256Utf8 } from "./sha256.js";
+
+export { sha256Utf8 } from "./sha256.js";
 
 /** Fixed filename written at the output directory root. */
 export const BUILD_MANIFEST_FILENAME = "rendershield-manifest.json";
@@ -33,16 +35,13 @@ export type BuildManifestV1 = {
 export type BuildManifestPageInput = {
   routePath: string;
   sourcePathAbs: string;
+  /** SHA-256 of the exact UTF-8 source used to parse/render this page. */
+  sourceSha256: string;
   /** Exact HTML string written to disk (utf8). */
   html: string;
   /** Absolute path of the written index.html. */
   outputPathAbs: string;
 };
-
-/** SHA-256 hex digest of a utf8 string. */
-export function sha256Utf8(content: string): string {
-  return createHash("sha256").update(content, "utf8").digest("hex");
-}
 
 /** Normalize a filesystem path to a portable `/`-separated relative path. */
 export function toPosixRelative(relativePath: string): string {
@@ -90,16 +89,19 @@ export function outDirRelativeOutputPath(
   return toPosixRelative(relative);
 }
 
-export async function buildManifestPageEntry(
+/**
+ * Build one manifest page entry from already-captured provenance.
+ * Does not re-read the source file (avoids TOCTOU with rendered HTML).
+ */
+export function buildManifestPageEntry(
   cwd: string,
   outDirAbs: string,
   input: BuildManifestPageInput
-): Promise<BuildManifestPageEntry> {
-  const sourceRaw = await fs.readFile(input.sourcePathAbs, "utf8");
+): BuildManifestPageEntry {
   return {
     route: input.routePath,
     source: projectRelativeSourcePath(cwd, input.sourcePathAbs),
-    sourceSha256: sha256Utf8(sourceRaw),
+    sourceSha256: input.sourceSha256,
     output: outDirRelativeOutputPath(outDirAbs, input.outputPathAbs),
     outputSha256: sha256Utf8(input.html),
   };

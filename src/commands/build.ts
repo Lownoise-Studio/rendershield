@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import path from "node:path";
 import { loadConfig } from "../core/loadConfig.js";
-import { loadAllMarkdownDocs } from "../core/loadMarkdown.js";
+import { loadAllMarkdownDocsWithProvenance } from "../core/loadMarkdown.js";
 import { renderPageHtml } from "../core/renderHtml.js";
 import { generateSitemapXml } from "../core/generateSitemap.js";
 import { generateRobotsTxt } from "../core/generateRobots.js";
@@ -32,7 +32,8 @@ export async function cmdBuild(cwd = process.cwd(), options?: CommandOptions) {
   await fs.remove(outDirAbs);
   await fs.ensureDir(outDirAbs);
 
-  const docs = await loadAllMarkdownDocs(cfg, cwd);
+  const parsedDocs = await loadAllMarkdownDocsWithProvenance(cfg, cwd);
+  const docs = parsedDocs.map((p) => p.doc);
 
   if (docs.length === 0) {
     throw renderShieldError(
@@ -44,7 +45,7 @@ export async function cmdBuild(cwd = process.cwd(), options?: CommandOptions) {
   const pageEntries: BuildManifestPageEntry[] = [];
 
   // Generate pages (containment enforced at write boundary; validate BEFORE writing)
-  for (const doc of docs) {
+  for (const { doc, sourceSha256 } of parsedDocs) {
     const pageDir = resolveRoutePageDirInOutDir(outDirAbs, doc.routePath);
     await fs.ensureDir(pageDir);
 
@@ -61,9 +62,10 @@ export async function cmdBuild(cwd = process.cwd(), options?: CommandOptions) {
     await fs.writeFile(outFile, html, "utf8");
 
     pageEntries.push(
-      await buildManifestPageEntry(cwd, outDirAbs, {
+      buildManifestPageEntry(cwd, outDirAbs, {
         routePath: doc.routePath,
         sourcePathAbs: doc.sourcePath,
+        sourceSha256,
         html,
         outputPathAbs: outFile,
       })

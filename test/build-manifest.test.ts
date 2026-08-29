@@ -284,6 +284,71 @@ describe("deterministic build manifest (M1)", () => {
     expect(first.pages[0].outputSha256).not.toBe(second.pages[0].outputSha256);
   });
 
+  it("pairs sourceSha256 with the parse-time source snapshot, not a later file mutation", async () => {
+    const { parseMarkdownFileWithProvenance } = await import(
+      "../dist/core/markdownContent.js"
+    );
+    const { buildManifestPageEntry, sha256Utf8: hash } = await import(
+      "../dist/core/buildManifest.js"
+    );
+    const { renderPageHtml } = await import("../dist/core/renderHtml.js");
+    const { loadConfig } = await import("../dist/core/loadConfig.js");
+
+    await writeProject(tmpDir, {
+      slug: "toctou",
+      title: "TOCTOU Post",
+      body: "Original TOCTOU body with enough words and characters to satisfy the prerender article contract.",
+    });
+
+    const sourceAbs = path.join(tmpDir, "content", "blog", "toctou.md");
+    const originalRaw = await fs.readFile(sourceAbs, "utf8");
+    const originalHash = hash(originalRaw);
+
+    const { doc, sourceSha256 } = await parseMarkdownFileWithProvenance(
+      sourceAbs,
+      "blog",
+      "/blog"
+    );
+    expect(sourceSha256).toBe(originalHash);
+
+    // Mutate on disk after parse (simulates TOCTOU between parse and manifest write)
+    await fs.writeFile(
+      sourceAbs,
+      `---
+title: Mutated Post
+excerpt: Excerpt for mutated content with enough words for validation later on.
+datePublished: 2025-01-01
+coverImage: /images/mutated.jpg
+slug: toctou
+---
+
+Mutated TOCTOU body with enough words and characters to satisfy the prerender article contract.
+`,
+      "utf8"
+    );
+    const mutatedHash = hash(await fs.readFile(sourceAbs, "utf8"));
+    expect(mutatedHash).not.toBe(originalHash);
+
+    const cfg = await loadConfig(tmpDir);
+    const html = renderPageHtml(cfg, doc);
+    const outDirAbs = path.join(tmpDir, "dist-prerender");
+    const outputAbs = path.join(outDirAbs, "blog", "toctou", "index.html");
+
+    const entry = buildManifestPageEntry(tmpDir, outDirAbs, {
+      routePath: doc.routePath,
+      sourcePathAbs: sourceAbs,
+      sourceSha256,
+      html,
+      outputPathAbs: outputAbs,
+    });
+
+    // Manifest must keep the parse-time hash, not the mutated on-disk content.
+    expect(entry.sourceSha256).toBe(originalHash);
+    expect(entry.sourceSha256).not.toBe(mutatedHash);
+    expect(entry.outputSha256).toBe(hash(html));
+    expect(doc.title).toBe("TOCTOU Post");
+  });
+
   it("does not leave a success manifest when page generation fails", async () => {
     await writeProject(tmpDir, { badFrontmatter: true });
 
