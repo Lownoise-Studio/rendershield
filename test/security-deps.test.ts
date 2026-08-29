@@ -71,8 +71,15 @@ describe("patched dependency versions", () => {
   it("lockfile resolves patched markdown-it, linkify-it, js-yaml, picomatch", () => {
     expect(lockVersion("markdown-it")).toMatch(/^14\.(2|3)\./);
     expect(lockVersion("linkify-it")).toBe("5.0.2");
-    expect(lockVersion("js-yaml")).toBe("3.15.1");
+    expect(lockVersion("js-yaml")).toMatch(/^4\./);
     expect(lockVersion("picomatch")).toBe("2.3.2");
+  });
+
+  it("does not include gray-matter in the production dependency tree", () => {
+    const lock = fs.readJsonSync(LOCKFILE) as {
+      packages: Record<string, unknown>;
+    };
+    expect(lock.packages["node_modules/gray-matter"]).toBeUndefined();
   });
 });
 

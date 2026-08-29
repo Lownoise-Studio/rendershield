@@ -1,10 +1,10 @@
 import path from "node:path";
 import fg from "fast-glob";
 import fs from "fs-extra";
-import matter from "gray-matter";
 import MarkdownIt from "markdown-it";
 import type { MarkdownDoc } from "../types.js";
 import { renderShieldError } from "../errors.js";
+import { parseYamlFrontmatter } from "./parseYamlFrontmatter.js";
 import {
   validateContentRoutePath,
   validateRouteSlug,
@@ -42,7 +42,14 @@ export async function discoverCollectionFiles(
   baseDirAbs: string,
   pattern: string
 ): Promise<string[]> {
-  return fg(pattern, { cwd: baseDirAbs, onlyFiles: true });
+  // Disable extglob so collection patterns cannot exercise picomatch extglob ReDoS paths.
+  // Documented globs (e.g. blog/**/*.md) do not need extglob or brace expansion.
+  return fg(pattern, {
+    cwd: baseDirAbs,
+    onlyFiles: true,
+    extglob: false,
+    braceExpansion: false,
+  });
 }
 
 /** Build routePath from collection routeBase and document slug. */
@@ -58,12 +65,12 @@ export async function parseMarkdownFile(
   routeBase: string
 ): Promise<MarkdownDoc> {
   const raw = await fs.readFile(absPath, "utf8");
-  const parsed = matter(raw);
+  const parsed = parseYamlFrontmatter(raw, absPath);
 
-  const title = requireString(parsed.data?.title, "title", absPath);
-  const excerpt = requireString(parsed.data?.excerpt, "excerpt", absPath);
+  const title = requireString(parsed.data.title, "title", absPath);
+  const excerpt = requireString(parsed.data.excerpt, "excerpt", absPath);
 
-  const datePublishedRaw = parsed.data?.datePublished;
+  const datePublishedRaw = parsed.data.datePublished;
   if (datePublishedRaw === undefined || datePublishedRaw === null) {
     throw renderShieldError(
       "CONTENT_INVALID",
@@ -72,16 +79,16 @@ export async function parseMarkdownFile(
   }
   const datePublished = normalizeDate(datePublishedRaw, absPath);
 
-  const coverImage = requireString(parsed.data?.coverImage, "coverImage", absPath);
+  const coverImage = requireString(parsed.data.coverImage, "coverImage", absPath);
   const slug = validateRouteSlug(
-    requireString(parsed.data?.slug, "slug", absPath),
+    requireString(parsed.data.slug, "slug", absPath),
     absPath
   );
   const routePath = validateContentRoutePath(
     buildRoutePath(routeBase, slug),
     `routePath for ${absPath}`
   );
-  const htmlContent = md.render(parsed.content ?? "");
+  const htmlContent = md.render(parsed.content);
 
   return {
     sourcePath: absPath,
