@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Deterministic local build manifest (`rendershield-manifest.json`) written by `rendershield build`: `manifestVersion` 1, package generator identity, per-page route/source/output paths (relative, `/`-normalized), and SHA-256 hashes of source Markdown and generated HTML. No timestamps or absolute paths. Doctor mtime freshness is unchanged (manifest-backed freshness is M2).
+
 ### Security
 
 - Replace `gray-matter` with a YAML-only frontmatter parser (`js-yaml` DEFAULT_SCHEMA) so JavaScript/eval frontmatter engines are not present or reachable.

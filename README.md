@@ -144,6 +144,8 @@ npx rendershield build
 dist-prerender/
 ```
 
+Includes prerendered pages plus `rendershield-manifest.json` (local deterministic provenance). See [DEPLOY.md](DEPLOY.md#build-manifest-local-provenance).
+
 **Local verify**
 
 ```bash

@@ -10,6 +10,13 @@ import { validatePrerenderHtml } from "../core/validateOutput.js";
 import { validateOutputPath } from "../core/outputPathSafety.js";
 import { resolveArtifactPathInOutDir } from "../core/artifactPathSafety.js";
 import { resolveRoutePageDirInOutDir } from "../core/routePathSafety.js";
+import {
+  BUILD_MANIFEST_FILENAME,
+  buildManifestPageEntry,
+  createBuildManifestV1,
+  writeBuildManifestAtomic,
+  type BuildManifestPageEntry,
+} from "../core/buildManifest.js";
 import { renderShieldError } from "../errors.js";
 import type { CommandOptions } from "../configPath.js";
 
@@ -34,6 +41,8 @@ export async function cmdBuild(cwd = process.cwd(), options?: CommandOptions) {
     );
   }
 
+  const pageEntries: BuildManifestPageEntry[] = [];
+
   // Generate pages (containment enforced at write boundary; validate BEFORE writing)
   for (const doc of docs) {
     const pageDir = resolveRoutePageDirInOutDir(outDirAbs, doc.routePath);
@@ -50,6 +59,15 @@ export async function cmdBuild(cwd = process.cwd(), options?: CommandOptions) {
     });
 
     await fs.writeFile(outFile, html, "utf8");
+
+    pageEntries.push(
+      await buildManifestPageEntry(cwd, outDirAbs, {
+        routePath: doc.routePath,
+        sourcePathAbs: doc.sourcePath,
+        html,
+        outputPathAbs: outFile,
+      })
+    );
   }
 
   // sitemap.xml
@@ -82,8 +100,12 @@ export async function cmdBuild(cwd = process.cwd(), options?: CommandOptions) {
     await fs.writeFile(path.join(outDirAbs, "worker.js"), workerJs, "utf8");
   }
 
+  // Deterministic local provenance (after successful page + artifact generation)
+  const manifest = createBuildManifestV1(pageEntries);
+  await writeBuildManifestAtomic(outDirAbs, manifest);
+
   console.log(`Built ${docs.length} pages into ${cfg.output.outDir}/`);
   console.log(
-    `Output includes: ${cfg.sitemap.enabled ? "sitemap.xml " : ""}${cfg.robots.enabled ? "robots.txt " : ""}${cfg.worker.enabled ? "worker.js" : ""}`
+    `Output includes: ${cfg.sitemap.enabled ? "sitemap.xml " : ""}${cfg.robots.enabled ? "robots.txt " : ""}${cfg.worker.enabled ? "worker.js " : ""}${BUILD_MANIFEST_FILENAME}`
   );
 }

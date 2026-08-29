@@ -49,6 +49,8 @@ Route: `{routeBase}/{slug}` → `dist-prerender/.../index.html`.
 | `outDir` | Relative path inside project, e.g. `dist-prerender`. |
 | `prettyHtml` | Pretty-print HTML (default `true`). |
 
+A successful build also writes `rendershield-manifest.json` at the root of `outDir` (local deterministic provenance; see [DEPLOY.md](../DEPLOY.md#build-manifest-local-provenance)).
+
 ## `worker`
 
 When `enabled: true`:
