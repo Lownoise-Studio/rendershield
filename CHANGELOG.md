@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Content-route path traversal hardening: validate `slug` / `routeBase` / `routePath` segments (reject `.`, `..`, NUL, backslashes) and enforce filesystem containment under `output.outDir` at the page write boundary. Doctor route resolution uses the same primitive and will not probe escaped paths.
+- `validateOutputPath` resolves `outDir` against the realpath'd project root so symlink roots (e.g. macOS `/var` → `/private/var`) do not false-positive as traversal.
+
 ## [1.2.0] - 2026-08-24
 
 ### Added

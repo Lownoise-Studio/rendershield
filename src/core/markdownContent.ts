@@ -5,6 +5,10 @@ import matter from "gray-matter";
 import MarkdownIt from "markdown-it";
 import type { MarkdownDoc } from "../types.js";
 import { renderShieldError } from "../errors.js";
+import {
+  validateContentRoutePath,
+  validateRouteSlug,
+} from "./routePathSafety.js";
 
 const md = new MarkdownIt({ html: false, linkify: true, typographer: true });
 
@@ -69,8 +73,14 @@ export async function parseMarkdownFile(
   const datePublished = normalizeDate(datePublishedRaw, absPath);
 
   const coverImage = requireString(parsed.data?.coverImage, "coverImage", absPath);
-  const slug = requireString(parsed.data?.slug, "slug", absPath);
-  const routePath = buildRoutePath(routeBase, slug);
+  const slug = validateRouteSlug(
+    requireString(parsed.data?.slug, "slug", absPath),
+    absPath
+  );
+  const routePath = validateContentRoutePath(
+    buildRoutePath(routeBase, slug),
+    `routePath for ${absPath}`
+  );
   const htmlContent = md.render(parsed.content ?? "");
 
   return {

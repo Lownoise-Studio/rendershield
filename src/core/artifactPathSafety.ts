@@ -1,19 +1,7 @@
 import fs from "fs-extra";
 import path from "node:path";
 import { renderShieldError } from "../errors.js";
-
-/**
- * True when path.relative() indicates the candidate is outside the base directory.
- * Matches complete parent-segment traversal (`..` or `..${sep}...`), not names that
- * merely begin with two dots (e.g. `..metadata`).
- */
-function isOutsideBase(relativePath: string): boolean {
-  return (
-    relativePath === ".." ||
-    relativePath.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relativePath)
-  );
-}
+import { isOutsideBase } from "./pathContainment.js";
 
 /**
  * Validates a site-relative artifact path from config (sitemap.path, robots.path).

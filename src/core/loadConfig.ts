@@ -2,6 +2,7 @@ import fs from "fs-extra";
 import path from "node:path";
 import { RenderShieldConfig, SCHEMA_TYPES, type SchemaType } from "../types.js";
 import { renderShieldError } from "../errors.js";
+import { validateRouteBase } from "./routePathSafety.js";
 import {
   readArtifactPathConfig,
   resolveArtifactPathInOutDir,
@@ -273,13 +274,16 @@ function normalizeCollections(collections: unknown[]): RenderShieldConfig["conte
       );
     }
 
+    const routeBaseField = `content.markdown.collections[${index}].routeBase`;
+    const normalizedRouteBase = validateRouteBase(routeBase.trim(), routeBaseField);
+
     const schemaType: SchemaType =
       schemaTypeRaw === undefined ? "Article" : parseSchemaType(schemaTypeRaw, index);
 
     return {
       name: name.trim(),
       pattern: pattern.trim(),
-      routeBase: routeBase.trim(),
+      routeBase: normalizedRouteBase,
       schemaType,
     };
   });
