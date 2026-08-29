@@ -30,6 +30,54 @@ Body paragraph with **markdown**.
     expect(parsed.content).toContain("Body paragraph with **markdown**.");
   });
 
+  it("parses UTF-8 BOM-prefixed YAML frontmatter and preserves body", () => {
+    const raw =
+      "\uFEFF---\n" +
+      "title: Bom Post\n" +
+      "excerpt: Excerpt for BOM-prefixed frontmatter parsing.\n" +
+      "datePublished: 2025-06-02\n" +
+      "coverImage: /images/bom.jpg\n" +
+      "slug: bom-post\n" +
+      "---\n\n" +
+      "BOM body with **emphasis**.\n";
+    const parsed = parseYamlFrontmatter(raw, "bom.md");
+    expect(parsed.data.title).toBe("Bom Post");
+    expect(parsed.data.slug).toBe("bom-post");
+    expect(parsed.content).toContain("BOM body with **emphasis**.");
+    expect(parsed.content.charCodeAt(0)).not.toBe(0xfeff);
+  });
+
+  it("strips a leading BOM when no frontmatter is present", () => {
+    const parsed = parseYamlFrontmatter("\uFEFFJust body text\n", "plain.md");
+    expect(parsed.data).toEqual({});
+    expect(parsed.content).toBe("Just body text\n");
+  });
+
+  it("rejects BOM-prefixed JavaScript-tagged frontmatter without evaluating it", () => {
+    let evaluated = false;
+    const marker = {
+      set ran(v: boolean) {
+        evaluated = v;
+      },
+    };
+    (globalThis as { __rsFrontmatterProbe?: typeof marker }).__rsFrontmatterProbe =
+      marker;
+
+    const payload =
+      "\uFEFF---js\n" +
+      "({ get title() { globalThis.__rsFrontmatterProbe.ran = true; return \"x\"; } })\n" +
+      "---\n\nBody\n";
+    try {
+      expect(() => parseYamlFrontmatter(payload, "hostile-bom.md")).toThrow(
+        /Unsupported frontmatter language/
+      );
+      expect(evaluated).toBe(false);
+    } finally {
+      delete (globalThis as { __rsFrontmatterProbe?: typeof marker })
+        .__rsFrontmatterProbe;
+    }
+  });
+
   it("accepts quoted datePublished strings", () => {
     const parsed = parseYamlFrontmatter(
       `---
@@ -177,6 +225,28 @@ Hello **world**.
     expect(doc.datePublished).toBe("2025-03-01");
     expect(doc.slug).toBe("parsed-post");
     expect(doc.htmlContent).toContain("<strong>world</strong>");
+  });
+
+  it("loads required fields from a BOM-prefixed Markdown file", async () => {
+    const file = path.join(tmpDir, "bom-post.md");
+    await fs.writeFile(
+      file,
+      "\uFEFF---\n" +
+        "title: BOM Parsed Post\n" +
+        "excerpt: Excerpt for BOM-prefixed Markdown parse path.\n" +
+        "datePublished: 2025-03-02\n" +
+        "coverImage: /images/bom-post.jpg\n" +
+        "slug: bom-parsed-post\n" +
+        "---\n\n" +
+        "Hello **bom** body.\n",
+      "utf8"
+    );
+
+    const doc = await parseMarkdownFile(file, "blog", "/blog");
+    expect(doc.title).toBe("BOM Parsed Post");
+    expect(doc.datePublished).toBe("2025-03-02");
+    expect(doc.slug).toBe("bom-parsed-post");
+    expect(doc.htmlContent).toContain("<strong>bom</strong>");
   });
 
   it("rejects ---js frontmatter on the Markdown parse path", async () => {

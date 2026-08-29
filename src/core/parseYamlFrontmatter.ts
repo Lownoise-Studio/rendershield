@@ -20,11 +20,15 @@ export function parseYamlFrontmatter(
   raw: string,
   sourceLabel = "markdown"
 ): YamlFrontmatterResult {
-  if (!raw.startsWith(OPEN)) {
-    return { data: {}, content: raw };
+  // Match prior gray-matter behavior: strip exactly one leading UTF-8 BOM.
+  const normalizedRaw =
+    raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
+
+  if (!normalizedRaw.startsWith(OPEN)) {
+    return { data: {}, content: normalizedRaw };
   }
 
-  const afterOpen = raw.slice(OPEN.length);
+  const afterOpen = normalizedRaw.slice(OPEN.length);
   const firstLineMatch = afterOpen.match(/^([^\r\n]*)(\r?\n|$)/);
   if (!firstLineMatch) {
     return { data: {}, content: "" };
