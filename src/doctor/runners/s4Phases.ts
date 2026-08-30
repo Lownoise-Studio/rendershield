@@ -213,15 +213,16 @@ export async function runOutputPresencePhase(
 
 async function runMtimeFreshnessFallback(
   ctx: DoctorPhaseContext,
-  collector: DoctorCollector
+  collector: DoctorCollector,
+  outDirAbs: string
 ): Promise<void> {
-  if (!ctx.outDirAbs) return;
+  if (ctx.docs.length === 0) return;
 
   const staleRoutes: string[] = [];
   const currentRoutes: string[] = [];
 
   for (const doc of ctx.docs) {
-    const htmlPath = tryRouteToIndexHtmlPath(ctx.outDirAbs, doc.routePath);
+    const htmlPath = tryRouteToIndexHtmlPath(outDirAbs, doc.routePath);
     if (htmlPath === null) continue;
     if (!(await fs.pathExists(htmlPath))) continue;
 
@@ -270,111 +271,158 @@ async function runMtimeFreshnessFallback(
 }
 
 async function runManifestHashFreshness(
-  ctx: DoctorPhaseContext,
+  cwd: string,
+  outDirAbs: string,
   collector: DoctorCollector,
   manifestPath: string,
   pages: BuildManifestPageEntry[]
 ): Promise<void> {
-  if (!ctx.outDirAbs) return;
-
   const matchingRoutes: string[] = [];
 
   for (const page of pages) {
-    const result = await compareManifestPageFreshness(
-      ctx.cwd,
-      ctx.outDirAbs,
-      page
-    );
+    const findings = await compareManifestPageFreshness(cwd, outDirAbs, page);
 
-    if (result.status === "match") {
-      matchingRoutes.push(result.route);
-      continue;
-    }
-
-    if (result.status === "source-changed") {
-      collector.warn(
-        "freshness",
-        "DOCTOR_FRESHNESS_SOURCE_CHANGED",
-        "output",
-        `${result.route}: source Markdown SHA-256 differs from build manifest`,
-        {
-          hint: "Source changed since the build that wrote the manifest. Run rendershield build to refresh.",
-          details: {
-            routePath: result.route,
-            sourcePath: result.sourcePath,
-            htmlPath: result.htmlPath,
-            expectedSha256: result.expectedSha256,
-            actualSha256: result.actualSha256,
-            method: "manifest-sha256",
-            concern: "source-provenance",
-            manifestPath,
-          },
-        }
-      );
-      continue;
-    }
-
-    if (result.status === "output-changed") {
-      collector.warn(
-        "freshness",
-        "DOCTOR_FRESHNESS_OUTPUT_CHANGED",
-        "output",
-        `${result.route}: generated HTML SHA-256 differs from build manifest`,
-        {
-          hint: "Generated HTML changed since the build that wrote the manifest. Run rendershield build to refresh, or investigate unexpected output edits.",
-          details: {
-            routePath: result.route,
-            sourcePath: result.sourcePath,
-            htmlPath: result.htmlPath,
-            expectedSha256: result.expectedSha256,
-            actualSha256: result.actualSha256,
-            method: "manifest-sha256",
-            concern: "output-integrity",
-            manifestPath,
-          },
-        }
-      );
-      continue;
-    }
-
-    if (result.status === "source-missing") {
-      collector.fail(
-        "freshness",
-        "DOCTOR_FRESHNESS_SOURCE_MISSING",
-        "output",
-        `${result.route}: source Markdown listed in build manifest is missing`,
-        {
-          hint: "Restore the source file or rebuild after fixing content inventory.",
-          details: {
-            routePath: result.route,
-            sourcePath: result.sourcePath,
-            htmlPath: result.htmlPath,
-            method: "manifest-sha256",
-            concern: "source-provenance",
-            manifestPath,
-          },
-        }
-      );
-      continue;
-    }
-
-    collector.fail(
-      "freshness",
-      "DOCTOR_FRESHNESS_OUTPUT_MISSING",
-      "output",
-      `${result.route}: generated HTML listed in build manifest is missing`,
-      {
-        hint: "Run rendershield build to regenerate missing pages.",
-        details: {
-          routePath: result.route,
-          sourcePath: result.sourcePath,
-          htmlPath: result.htmlPath,
-          method: "manifest-sha256",
-          concern: "output-integrity",
-          manifestPath,
-        },
+    for (const result of findings) {
+      if (result.status === "match") {
+        matchingRoutes.push(result.route);
+        continue;
       }
-    );
+
+      if (result.status === "source-changed") {
+        collector.warn(
+          "freshness",
+          "DOCTOR_FRESHNESS_SOURCE_CHANGED",
+          "output",
+          `${result.route}: source Markdown SHA-256 differs from build manifest`,
+          {
+            hint: "Source changed since the build that wrote the manifest. Run rendershield build to refresh.",
+            details: {
+              routePath: result.route,
+              sourcePath: result.sourcePath,
+              htmlPath: result.htmlPath,
+              expectedSha256: result.expectedSha256,
+              actualSha256: result.actualSha256,
+              method: "manifest-sha256",
+              concern: "source-provenance",
+              manifestPath,
+            },
+          }
+        );
+        continue;
+      }
+
+      if (result.status === "output-changed") {
+        collector.warn(
+          "freshness",
+          "DOCTOR_FRESHNESS_OUTPUT_CHANGED",
+          "output",
+          `${result.route}: generated HTML SHA-256 differs from build manifest`,
+          {
+            hint: "Generated HTML changed since the build that wrote the manifest. Run rendershield build to refresh, or investigate unexpected output edits.",
+            details: {
+              routePath: result.route,
+              sourcePath: result.sourcePath,
+              htmlPath: result.htmlPath,
+              expectedSha256: result.expectedSha256,
+              actualSha256: result.actualSha256,
+              method: "manifest-sha256",
+              concern: "output-integrity",
+              manifestPath,
+            },
+          }
+        );
+        continue;
+      }
+
+      if (result.status === "source-missing") {
+        collector.fail(
+          "freshness",
+          "DOCTOR_FRESHNESS_SOURCE_MISSING",
+          "output",
+          `${result.route}: source Markdown listed in build manifest is missing`,
+          {
+            hint: "Restore the source file or rebuild after fixing content inventory.",
+            details: {
+              routePath: result.route,
+              sourcePath: result.sourcePath,
+              htmlPath: result.htmlPath,
+              method: "manifest-sha256",
+              concern: "source-provenance",
+              manifestPath,
+            },
+          }
+        );
+        continue;
+      }
+
+      if (result.status === "output-missing") {
+        collector.fail(
+          "freshness",
+          "DOCTOR_FRESHNESS_OUTPUT_MISSING",
+          "output",
+          `${result.route}: generated HTML listed in build manifest is missing`,
+          {
+            hint: "Run rendershield build to regenerate missing pages.",
+            details: {
+              routePath: result.route,
+              sourcePath: result.sourcePath,
+              htmlPath: result.htmlPath,
+              method: "manifest-sha256",
+              concern: "output-integrity",
+              manifestPath,
+            },
+          }
+        );
+        continue;
+      }
+
+      if (result.status === "source-unreadable" || result.status === "source-unsafe") {
+        collector.fail(
+          "freshness",
+          "DOCTOR_FRESHNESS_SOURCE_UNREADABLE",
+          "output",
+          `${result.route}: source Markdown listed in build manifest is unreadable or unsafe`,
+          {
+            hint: "Fix the source path (symlink escape, directory, or permissions) or rebuild after restoring a regular Markdown file.",
+            details: {
+              routePath: result.route,
+              sourcePath: result.sourcePath,
+              htmlPath: result.htmlPath,
+              reason: result.reason,
+              message: result.message,
+              resolvedPath: result.resolvedPath,
+              method: "manifest-sha256",
+              concern: "source-provenance",
+              manifestPath,
+            },
+          }
+        );
+        continue;
+      }
+
+      if (result.status === "output-unreadable" || result.status === "output-unsafe") {
+        collector.fail(
+          "freshness",
+          "DOCTOR_FRESHNESS_OUTPUT_UNREADABLE",
+          "output",
+          `${result.route}: generated HTML listed in build manifest is unreadable or unsafe`,
+          {
+            hint: "Fix the output path (symlink escape, directory, or permissions) or rebuild to regenerate a regular HTML file.",
+            details: {
+              routePath: result.route,
+              sourcePath: result.sourcePath,
+              htmlPath: result.htmlPath,
+              reason: result.reason,
+              message: result.message,
+              resolvedPath: result.resolvedPath,
+              method: "manifest-sha256",
+              concern: "output-integrity",
+              manifestPath,
+            },
+          }
+        );
+      }
+    }
   }
 
   if (matchingRoutes.length > 0) {
@@ -395,16 +443,27 @@ async function runManifestHashFreshness(
   }
 }
 
+/**
+ * Freshness runs when config is present and outDir is safe — including when
+ * the current Markdown inventory is empty (so a prior manifest can still report
+ * DOCTOR_FRESHNESS_SOURCE_MISSING). Mtime fallback still requires docs.
+ */
 export async function runFreshnessPhase(
   ctx: DoctorPhaseContext,
   collector: DoctorCollector
 ): Promise<void> {
-  if (!canRunOutputPhases(ctx) || !ctx.config || !ctx.outDirAbs) return;
+  if (!ctx.config) return;
 
-  const loaded = await loadBuildManifestForDoctor(ctx.cwd, ctx.outDirAbs);
+  let outDirAbs = ctx.outDirAbs;
+  if (!outDirAbs) {
+    outDirAbs = (await resolveSafeOutDirAbs(ctx)) ?? undefined;
+  }
+  if (!outDirAbs) return;
+
+  const loaded = await loadBuildManifestForDoctor(ctx.cwd, outDirAbs);
 
   if (loaded.status === "absent") {
-    await runMtimeFreshnessFallback(ctx, collector);
+    await runMtimeFreshnessFallback(ctx, collector, outDirAbs);
     return;
   }
 
@@ -420,7 +479,8 @@ export async function runFreshnessPhase(
   }
 
   await runManifestHashFreshness(
-    ctx,
+    ctx.cwd,
+    outDirAbs,
     collector,
     loaded.path,
     loaded.manifest.pages
@@ -436,9 +496,17 @@ export async function runContractPhase(
   for (const doc of ctx.docs) {
     const htmlPath = tryRouteToIndexHtmlPath(ctx.outDirAbs, doc.routePath);
     if (htmlPath === null) continue;
-    if (!(await fs.pathExists(htmlPath))) continue;
 
-    const html = await fs.readFile(htmlPath, "utf8");
+    let html: string;
+    try {
+      const st = await fs.stat(htmlPath);
+      if (!st.isFile()) continue;
+      html = await fs.readFile(htmlPath, "utf8");
+    } catch {
+      // Missing / unreadable output is reported by presence/freshness; do not reject the engine.
+      continue;
+    }
+
     const contract = checkPrerenderContract(html, {
       routePath: doc.routePath,
       outFile: htmlPath,

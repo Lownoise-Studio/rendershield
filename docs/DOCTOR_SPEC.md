@@ -165,7 +165,7 @@ Doctor looks for `rendershield-manifest.json` **only** at the root of the config
 |-----------|----------|
 | **No manifest file** | Legacy **best-effort mtime** freshness: `DOCTOR_FRESHNESS_STALE` (WARN) / `DOCTOR_FRESHNESS_CURRENT` with `details.method: "mtime-best-effort"`. Pre-manifest projects keep working. |
 | **Manifest present but unusable** | **FAIL** — do **not** silently fall back to mtime. Codes: `DOCTOR_MANIFEST_INVALID` (malformed JSON, bad structure, unsafe paths, duplicate route/output) or `DOCTOR_MANIFEST_UNSUPPORTED_VERSION`. |
-| **Valid manifest** | For each page entry, SHA-256 current source Markdown and generated HTML with the same utf8 semantics as `build`, then compare to `sourceSha256` / `outputSha256`. |
+| **Valid manifest** | For each page entry, SHA-256 current source Markdown and generated HTML with the same utf8 semantics as `build`, then compare to `sourceSha256` / `outputSha256`. Runs even when the **current Markdown inventory is empty** (so a deleted source listed in a prior manifest still yields `DOCTOR_FRESHNESS_SOURCE_MISSING`). Paths are accepted only after lexical + **realpath/symlink** containment under project root / `outDir`. |
 
 Valid-manifest page outcomes:
 
@@ -174,10 +174,13 @@ Valid-manifest page outcomes:
 | Source + output match | `DOCTOR_FRESHNESS_CURRENT` | PASS | `manifest-sha256` |
 | Source hash mismatch | `DOCTOR_FRESHNESS_SOURCE_CHANGED` | WARN | `source-provenance` |
 | Output hash mismatch | `DOCTOR_FRESHNESS_OUTPUT_CHANGED` | WARN | `output-integrity` |
+| Both hashes mismatch | both WARN codes above (deterministic: source then output) | WARN | — |
 | Source missing | `DOCTOR_FRESHNESS_SOURCE_MISSING` | FAIL | `source-provenance` |
 | Output missing | `DOCTOR_FRESHNESS_OUTPUT_MISSING` | FAIL | `output-integrity` |
+| Source not a readable regular file / symlink escape at compare | `DOCTOR_FRESHNESS_SOURCE_UNREADABLE` | FAIL | `source-provenance` |
+| Output not a readable regular file / symlink escape at compare | `DOCTOR_FRESHNESS_OUTPUT_UNREADABLE` | FAIL | `output-integrity` |
 
-This is **local build provenance**, not production verification. Use `verify --prod` for live URL checks.
+Symlink escapes discovered while validating the manifest file itself use `DOCTOR_MANIFEST_INVALID` (`reason: unsafe-path`) and do **not** fall back to mtime. Contained symlinks whose realpath stays inside the permitted root are allowed.
 
 Full code list and phase details: see implementation PRs for S3–S6 and M2.
 

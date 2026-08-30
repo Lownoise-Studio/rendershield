@@ -7,7 +7,7 @@ import {
   type BuildManifestPageEntry,
   type BuildManifestV1,
 } from "../core/buildManifest.js";
-import { assertContainedInBase } from "../core/pathContainment.js";
+import { checkContainedPathWithSymlinks } from "../core/pathContainment.js";
 import { validateContentRoutePath } from "../core/routePathSafety.js";
 import { sha256Utf8 } from "../core/sha256.js";
 import type { DoctorDiagnosticCode } from "./types.js";
@@ -37,6 +37,32 @@ export type ManifestLoadResult =
       status: "valid";
       path: string;
       manifest: BuildManifestV1;
+    };
+
+export type ManifestPathResolveResult =
+  | { ok: true; abs: string; real: string | null }
+  | {
+      ok: false;
+      reason: "unsafe-path" | "resolve-failed";
+      abs?: string;
+      resolvedPath?: string;
+      message: string;
+    };
+
+export type ManifestFileReadResult =
+  | { ok: true; content: string; abs: string }
+  | {
+      ok: false;
+      reason:
+        | "missing"
+        | "not-regular-file"
+        | "read-failed"
+        | "stat-failed"
+        | "unsafe-path"
+        | "resolve-failed";
+      abs: string;
+      resolvedPath?: string;
+      message: string;
     };
 
 function failInvalid(
@@ -81,40 +107,110 @@ function isSha256Hex(value: unknown): value is string {
 }
 
 /**
- * Resolve a project-relative `/`-separated path under cwd with containment.
- * Returns null when the path is unsafe.
+ * Resolve a relative posix path under baseAbs with lexical + realpath/symlink
+ * containment. Does not read file contents.
  */
-export function resolveManifestSourceAbs(
+export async function resolveContainedManifestPath(
+  baseAbs: string,
+  relPosix: string
+): Promise<ManifestPathResolveResult> {
+  if (!isSafeManifestRelativePosix(relPosix)) {
+    return {
+      ok: false,
+      reason: "unsafe-path",
+      message: `Path is not a safe relative path: ${String(relPosix)}`,
+    };
+  }
+
+  const candidateAbs = path.resolve(baseAbs, ...relPosix.split("/"));
+  const contained = await checkContainedPathWithSymlinks(baseAbs, candidateAbs);
+  if (!contained.ok) {
+    return {
+      ok: false,
+      reason:
+        contained.reason === "symlink-escape" || contained.reason === "lexical-escape"
+          ? "unsafe-path"
+          : "resolve-failed",
+      abs: contained.candidateAbs,
+      resolvedPath: contained.resolvedPath,
+      message: contained.message,
+    };
+  }
+
+  return {
+    ok: true,
+    abs: contained.candidateAbs,
+    real: contained.candidateReal,
+  };
+}
+
+export async function resolveManifestSourceAbs(
   cwd: string,
   sourceRel: string
-): string | null {
-  if (!isSafeManifestRelativePosix(sourceRel)) return null;
-  const candidateAbs = path.resolve(cwd, ...sourceRel.split("/"));
-  try {
-    return assertContainedInBase(cwd, candidateAbs, () => {
-      throw new Error("escape");
-    });
-  } catch {
-    return null;
-  }
+): Promise<ManifestPathResolveResult> {
+  return resolveContainedManifestPath(cwd, sourceRel);
+}
+
+export async function resolveManifestOutputAbs(
+  outDirAbs: string,
+  outputRel: string
+): Promise<ManifestPathResolveResult> {
+  return resolveContainedManifestPath(outDirAbs, outputRel);
 }
 
 /**
- * Resolve an outDir-relative `/`-separated path under outDirAbs with containment.
- * Returns null when the path is unsafe.
+ * After containment is proven, ensure the path is a readable regular file and
+ * return its utf8 contents. Never follows an uncontained symlink (caller must
+ * pass a path already validated by resolveContainedManifestPath).
  */
-export function resolveManifestOutputAbs(
-  outDirAbs: string,
-  outputRel: string
-): string | null {
-  if (!isSafeManifestRelativePosix(outputRel)) return null;
-  const candidateAbs = path.resolve(outDirAbs, ...outputRel.split("/"));
+export async function readContainedUtf8File(
+  absPath: string
+): Promise<ManifestFileReadResult> {
+  let st: fs.Stats;
   try {
-    return assertContainedInBase(outDirAbs, candidateAbs, () => {
-      throw new Error("escape");
-    });
-  } catch {
-    return null;
+    st = await fs.stat(absPath);
+  } catch (err: unknown) {
+    const code =
+      err && typeof err === "object" && "code" in err
+        ? String((err as { code: unknown }).code)
+        : "";
+    if (code === "ENOENT") {
+      return {
+        ok: false,
+        reason: "missing",
+        abs: absPath,
+        message: `Path does not exist: ${absPath}`,
+      };
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      ok: false,
+      reason: "stat-failed",
+      abs: absPath,
+      message: `Cannot stat path: ${message}`,
+    };
+  }
+
+  if (!st.isFile()) {
+    return {
+      ok: false,
+      reason: "not-regular-file",
+      abs: absPath,
+      message: `Path is not a regular file: ${absPath}`,
+    };
+  }
+
+  try {
+    const content = await fs.readFile(absPath, "utf8");
+    return { ok: true, content, abs: absPath };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      ok: false,
+      reason: "read-failed",
+      abs: absPath,
+      message: `Cannot read path: ${message}`,
+    };
   }
 }
 
@@ -270,12 +366,28 @@ export async function loadBuildManifestForDoctor(
 ): Promise<ManifestLoadResult> {
   const manifestPath = path.join(outDirAbs, BUILD_MANIFEST_FILENAME);
 
-  if (!(await fs.pathExists(manifestPath))) {
-    return { status: "absent", path: manifestPath };
+  let st: fs.Stats;
+  try {
+    st = await fs.stat(manifestPath);
+  } catch (err: unknown) {
+    const code =
+      err && typeof err === "object" && "code" in err
+        ? String((err as { code: unknown }).code)
+        : "";
+    if (code === "ENOENT") {
+      return { status: "absent", path: manifestPath };
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    return failInvalid(
+      manifestPath,
+      "malformed-json",
+      "DOCTOR_MANIFEST_INVALID",
+      `Build manifest could not be accessed: ${message}`,
+      { path: manifestPath }
+    );
   }
 
-  const stat = await fs.stat(manifestPath);
-  if (!stat.isFile()) {
+  if (!st.isFile()) {
     return failInvalid(
       manifestPath,
       "not-a-file",
@@ -428,33 +540,38 @@ export async function loadBuildManifestForDoctor(
     }
     outputsSeen.set(entry.output, i);
 
-    // Containment probes: reject entries that escape project root or outDir.
-    if (resolveManifestSourceAbs(cwd, entry.source) === null) {
+    const sourceResolved = await resolveManifestSourceAbs(cwd, entry.source);
+    if (!sourceResolved.ok) {
       return failInvalid(
         manifestPath,
         "unsafe-path",
         "DOCTOR_MANIFEST_INVALID",
-        `Build manifest pages[${i}].source escapes project root: ${entry.source}`,
+        `Build manifest pages[${i}].source is unsafe under project root: ${entry.source}`,
         {
           path: manifestPath,
           field: "source",
           source: entry.source,
           index: i,
+          resolveReason: sourceResolved.reason,
+          resolvedPath: sourceResolved.resolvedPath,
         }
       );
     }
 
-    if (resolveManifestOutputAbs(outDirAbs, entry.output) === null) {
+    const outputResolved = await resolveManifestOutputAbs(outDirAbs, entry.output);
+    if (!outputResolved.ok) {
       return failInvalid(
         manifestPath,
         "unsafe-path",
         "DOCTOR_MANIFEST_INVALID",
-        `Build manifest pages[${i}].output escapes output.outDir: ${entry.output}`,
+        `Build manifest pages[${i}].output is unsafe under output.outDir: ${entry.output}`,
         {
           path: manifestPath,
           field: "output",
           output: entry.output,
           index: i,
+          resolveReason: outputResolved.reason,
+          resolvedPath: outputResolved.resolvedPath,
         }
       );
     }
@@ -475,7 +592,7 @@ export async function loadBuildManifestForDoctor(
   return { status: "valid", path: manifestPath, manifest };
 }
 
-export type ManifestPageFreshness =
+export type ManifestPageFreshnessFinding =
   | {
       route: string;
       status: "match";
@@ -495,75 +612,177 @@ export type ManifestPageFreshness =
       status: "source-missing" | "output-missing";
       sourcePath?: string;
       htmlPath?: string;
+    }
+  | {
+      route: string;
+      status: "source-unreadable" | "output-unreadable";
+      sourcePath?: string;
+      htmlPath?: string;
+      reason: string;
+      message: string;
+      resolvedPath?: string;
+    }
+  | {
+      route: string;
+      status: "source-unsafe" | "output-unsafe";
+      sourcePath?: string;
+      htmlPath?: string;
+      reason: string;
+      message: string;
+      resolvedPath?: string;
     };
 
 /**
  * Compare current source Markdown and generated HTML to manifest SHA-256 values.
  * Read-only. Uses the same utf8 SHA-256 semantics as build (`sha256Utf8`).
+ * Returns one or more findings per page (both hash mismatches when both differ).
  */
 export async function compareManifestPageFreshness(
   cwd: string,
   outDirAbs: string,
   page: BuildManifestPageEntry
-): Promise<ManifestPageFreshness> {
-  const sourceAbs = resolveManifestSourceAbs(cwd, page.source);
-  if (sourceAbs === null) {
-    return { route: page.route, status: "source-missing" };
+): Promise<ManifestPageFreshnessFinding[]> {
+  const findings: ManifestPageFreshnessFinding[] = [];
+
+  const sourceResolved = await resolveManifestSourceAbs(cwd, page.source);
+  const outputResolved = await resolveManifestOutputAbs(outDirAbs, page.output);
+
+  if (!sourceResolved.ok) {
+    findings.push({
+      route: page.route,
+      status: "source-unsafe",
+      sourcePath: sourceResolved.abs,
+      reason: sourceResolved.reason,
+      message: sourceResolved.message,
+      resolvedPath: sourceResolved.resolvedPath,
+    });
   }
 
-  const htmlAbs = resolveManifestOutputAbs(outDirAbs, page.output);
-  if (htmlAbs === null) {
-    return { route: page.route, status: "output-missing" };
+  if (!outputResolved.ok) {
+    findings.push({
+      route: page.route,
+      status: "output-unsafe",
+      htmlPath: outputResolved.abs,
+      reason: outputResolved.reason,
+      message: outputResolved.message,
+      resolvedPath: outputResolved.resolvedPath,
+    });
   }
 
-  if (!(await fs.pathExists(sourceAbs))) {
-    return {
+  if (!sourceResolved.ok || !outputResolved.ok) {
+    return findings;
+  }
+
+  const sourcePath = sourceResolved.abs;
+  const htmlPath = outputResolved.abs;
+
+  let sourceContent: string | null = null;
+  let htmlContent: string | null = null;
+
+  if (sourceResolved.real === null) {
+    findings.push({
       route: page.route,
       status: "source-missing",
-      sourcePath: sourceAbs,
-      htmlPath: htmlAbs,
-    };
+      sourcePath,
+      htmlPath,
+    });
+  } else {
+    const sourceRead = await readContainedUtf8File(sourcePath);
+    if (!sourceRead.ok) {
+      if (sourceRead.reason === "missing") {
+        findings.push({
+          route: page.route,
+          status: "source-missing",
+          sourcePath,
+          htmlPath,
+        });
+      } else {
+        findings.push({
+          route: page.route,
+          status: "source-unreadable",
+          sourcePath,
+          htmlPath,
+          reason: sourceRead.reason,
+          message: sourceRead.message,
+          resolvedPath: sourceRead.resolvedPath,
+        });
+      }
+    } else {
+      sourceContent = sourceRead.content;
+    }
   }
 
-  if (!(await fs.pathExists(htmlAbs))) {
-    return {
+  if (outputResolved.real === null) {
+    findings.push({
       route: page.route,
       status: "output-missing",
-      sourcePath: sourceAbs,
-      htmlPath: htmlAbs,
-    };
+      sourcePath,
+      htmlPath,
+    });
+  } else {
+    const htmlRead = await readContainedUtf8File(htmlPath);
+    if (!htmlRead.ok) {
+      if (htmlRead.reason === "missing") {
+        findings.push({
+          route: page.route,
+          status: "output-missing",
+          sourcePath,
+          htmlPath,
+        });
+      } else {
+        findings.push({
+          route: page.route,
+          status: "output-unreadable",
+          sourcePath,
+          htmlPath,
+          reason: htmlRead.reason,
+          message: htmlRead.message,
+          resolvedPath: htmlRead.resolvedPath,
+        });
+      }
+    } else {
+      htmlContent = htmlRead.content;
+    }
   }
 
-  const sourceText = await fs.readFile(sourceAbs, "utf8");
-  const sourceActual = sha256Utf8(sourceText);
-  if (sourceActual !== page.sourceSha256) {
-    return {
-      route: page.route,
-      status: "source-changed",
-      sourcePath: sourceAbs,
-      htmlPath: htmlAbs,
-      expectedSha256: page.sourceSha256,
-      actualSha256: sourceActual,
-    };
+  if (sourceContent !== null && htmlContent !== null) {
+    const sourceActual = sha256Utf8(sourceContent);
+    const outputActual = sha256Utf8(htmlContent);
+
+    if (sourceActual !== page.sourceSha256) {
+      findings.push({
+        route: page.route,
+        status: "source-changed",
+        sourcePath,
+        htmlPath,
+        expectedSha256: page.sourceSha256,
+        actualSha256: sourceActual,
+      });
+    }
+
+    if (outputActual !== page.outputSha256) {
+      findings.push({
+        route: page.route,
+        status: "output-changed",
+        sourcePath,
+        htmlPath,
+        expectedSha256: page.outputSha256,
+        actualSha256: outputActual,
+      });
+    }
+
+    if (
+      sourceActual === page.sourceSha256 &&
+      outputActual === page.outputSha256
+    ) {
+      findings.push({
+        route: page.route,
+        status: "match",
+        sourcePath,
+        htmlPath,
+      });
+    }
   }
 
-  const htmlText = await fs.readFile(htmlAbs, "utf8");
-  const outputActual = sha256Utf8(htmlText);
-  if (outputActual !== page.outputSha256) {
-    return {
-      route: page.route,
-      status: "output-changed",
-      sourcePath: sourceAbs,
-      htmlPath: htmlAbs,
-      expectedSha256: page.outputSha256,
-      actualSha256: outputActual,
-    };
-  }
-
-  return {
-    route: page.route,
-    status: "match",
-    sourcePath: sourceAbs,
-    htmlPath: htmlAbs,
-  };
+  return findings;
 }

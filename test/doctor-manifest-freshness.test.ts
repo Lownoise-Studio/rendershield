@@ -440,4 +440,171 @@ describe("Doctor manifest-based freshness (M2)", () => {
     );
     expect(current?.details?.routes).toEqual(["/blog/alpha", "/blog/zeta"]);
   });
+
+  it("emits both source-changed and output-changed when both hashes differ", async () => {
+    await seedAndBuild();
+    const sourcePath = path.join(tmpDir, "content/blog/post.md");
+    const htmlPath = path.join(tmpDir, "dist-prerender/blog/post/index.html");
+    await fs.writeFile(sourcePath, `${await fs.readFile(sourcePath, "utf8")}\n<!-- src -->\n`, "utf8");
+    await fs.writeFile(htmlPath, `${await fs.readFile(htmlPath, "utf8")}\n<!-- out -->\n`, "utf8");
+
+    const result = await runDoctorEngine({ cwd: tmpDir });
+    const freshness = result.diagnostics.filter((d) => d.phaseId === "freshness");
+    const codes = freshness.map((d) => d.code);
+    expect(codes).toEqual([
+      "DOCTOR_FRESHNESS_SOURCE_CHANGED",
+      "DOCTOR_FRESHNESS_OUTPUT_CHANGED",
+    ]);
+  });
+
+  it("reports SOURCE_MISSING when the only source is deleted but manifest remains", async () => {
+    await seedAndBuild();
+    await fs.remove(path.join(tmpDir, "content/blog/post.md"));
+
+    const result = await runDoctorEngine({ cwd: tmpDir });
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "DOCTOR_FRESHNESS_SOURCE_MISSING",
+        severity: "fail",
+        phaseId: "freshness",
+        details: expect.objectContaining({ method: "manifest-sha256" }),
+      })
+    );
+  });
+
+  it("FAIL when source path is a symlink escaping cwd", async () => {
+    await seedAndBuild();
+    const outside = path.join(tmpDir, "..", `rs-escape-src-${path.basename(tmpDir)}.md`);
+    await fs.writeFile(outside, "secret outside\n", "utf8");
+    const sourcePath = path.join(tmpDir, "content/blog/post.md");
+    await fs.remove(sourcePath);
+    await fs.symlink(outside, sourcePath);
+
+    try {
+      const result = await runDoctorEngine({ cwd: tmpDir });
+      expect(result.ok).toBe(false);
+      expect(result.diagnostics).toContainEqual(
+        expect.objectContaining({
+          code: "DOCTOR_MANIFEST_INVALID",
+          severity: "fail",
+          details: expect.objectContaining({ reason: "unsafe-path" }),
+        })
+      );
+      expect(
+        result.diagnostics.some(
+          (d) =>
+            d.code === "DOCTOR_FRESHNESS_CURRENT" &&
+            d.details?.method === "mtime-best-effort"
+        )
+      ).toBe(false);
+    } finally {
+      await fs.remove(outside).catch(() => {});
+    }
+  });
+
+  it("FAIL when output path is a symlink escaping outDir", async () => {
+    await seedAndBuild();
+    const outside = path.join(tmpDir, "outside-html.html");
+    await fs.writeFile(outside, "<html>outside</html>\n", "utf8");
+    const htmlPath = path.join(tmpDir, "dist-prerender/blog/post/index.html");
+    await fs.remove(htmlPath);
+    await fs.symlink(outside, htmlPath);
+
+    const result = await runDoctorEngine({ cwd: tmpDir });
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "DOCTOR_MANIFEST_INVALID",
+        severity: "fail",
+        details: expect.objectContaining({ reason: "unsafe-path" }),
+      })
+    );
+  });
+
+  it("FAIL when a symlinked parent directory escapes the permitted root", async () => {
+    await seedAndBuild();
+    const outsideDir = path.join(
+      tmpDir,
+      "..",
+      `rs-escape-parent-${path.basename(tmpDir)}`
+    );
+    await fs.ensureDir(outsideDir);
+    await fs.writeFile(path.join(outsideDir, "post.md"), "escaped\n", "utf8");
+    const blogDir = path.join(tmpDir, "content/blog");
+    await fs.remove(blogDir);
+    const linkType = process.platform === "win32" ? "junction" : "dir";
+    await fs.symlink(outsideDir, blogDir, linkType);
+
+    try {
+      const result = await runDoctorEngine({ cwd: tmpDir });
+      expect(result.ok).toBe(false);
+      expect(result.diagnostics).toContainEqual(
+        expect.objectContaining({
+          code: "DOCTOR_MANIFEST_INVALID",
+          severity: "fail",
+          details: expect.objectContaining({ reason: "unsafe-path" }),
+        })
+      );
+    } finally {
+      await fs.remove(outsideDir).catch(() => {});
+    }
+  });
+
+  it("allows a contained symlink whose realpath stays inside the project", async () => {
+    await seedAndBuild();
+    const sourcePath = path.join(tmpDir, "content/blog/post.md");
+    const altPath = path.join(tmpDir, "content/blog/post-real.md");
+    await fs.move(sourcePath, altPath);
+    await fs.symlink(altPath, sourcePath);
+
+    const result = await runDoctorEngine({ cwd: tmpDir });
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "DOCTOR_FRESHNESS_CURRENT",
+        severity: "pass",
+        details: expect.objectContaining({ method: "manifest-sha256" }),
+      })
+    );
+  });
+
+  it("FAIL when source path is replaced by a directory", async () => {
+    await seedAndBuild();
+    const sourcePath = path.join(tmpDir, "content/blog/post.md");
+    await fs.remove(sourcePath);
+    await fs.ensureDir(sourcePath);
+
+    const result = await runDoctorEngine({ cwd: tmpDir });
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "DOCTOR_FRESHNESS_SOURCE_UNREADABLE",
+        severity: "fail",
+        details: expect.objectContaining({
+          method: "manifest-sha256",
+          reason: "not-regular-file",
+        }),
+      })
+    );
+  });
+
+  it("FAIL when output path is replaced by a directory", async () => {
+    await seedAndBuild();
+    const htmlPath = path.join(tmpDir, "dist-prerender/blog/post/index.html");
+    await fs.remove(htmlPath);
+    await fs.ensureDir(htmlPath);
+
+    const result = await runDoctorEngine({ cwd: tmpDir });
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "DOCTOR_FRESHNESS_OUTPUT_UNREADABLE",
+        severity: "fail",
+        details: expect.objectContaining({
+          method: "manifest-sha256",
+          reason: "not-regular-file",
+        }),
+      })
+    );
+  });
 });
