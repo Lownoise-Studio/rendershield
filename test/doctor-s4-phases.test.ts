@@ -149,6 +149,8 @@ describe("Doctor S4 output phases", () => {
 
   it("warns when source mtime is newer than built HTML (best-effort)", async () => {
     await buildProject();
+    // Legacy mtime path: only when no build manifest is present.
+    await fs.remove(path.join(tmpDir, "dist-prerender/rendershield-manifest.json"));
     const sourcePath = path.join(tmpDir, "content/blog/post.md");
     const future = new Date(Date.now() + 60_000);
     await fs.utimes(sourcePath, future, future);
@@ -166,6 +168,7 @@ describe("Doctor S4 output phases", () => {
 
   it("reports current freshness when source mtime is not newer", async () => {
     await buildProject();
+    await fs.remove(path.join(tmpDir, "dist-prerender/rendershield-manifest.json"));
 
     const result = await runDoctorEngine({ cwd: tmpDir });
     expect(result.diagnostics).toContainEqual(
@@ -173,7 +176,24 @@ describe("Doctor S4 output phases", () => {
         code: "DOCTOR_FRESHNESS_CURRENT",
         severity: "pass",
         message: expect.stringContaining("best-effort"),
+        details: expect.objectContaining({ method: "mtime-best-effort" }),
       })
+    );
+  });
+
+  it("uses manifest SHA-256 freshness after a successful build", async () => {
+    await buildProject();
+
+    const result = await runDoctorEngine({ cwd: tmpDir });
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "DOCTOR_FRESHNESS_CURRENT",
+        severity: "pass",
+        details: expect.objectContaining({ method: "manifest-sha256" }),
+      })
+    );
+    expect(result.diagnostics.some((d) => d.code === "DOCTOR_FRESHNESS_STALE")).toBe(
+      false
     );
   });
 

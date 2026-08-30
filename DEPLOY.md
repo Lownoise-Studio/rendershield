@@ -199,4 +199,6 @@ Successful `rendershield build` writes `rendershield-manifest.json` at the root 
 | `pages[].source` / `pages[].output` | Project-relative and outDir-relative paths using `/` (never absolute, never cwd) |
 | `pages[].sourceSha256` / `pages[].outputSha256` | SHA-256 of source Markdown bytes and of the exact HTML written for that page |
 
-The manifest is local OSS build provenance for deterministic correctness. It does not include timestamps, random IDs, machine-specific paths, or environment secrets. Doctor still uses existing mtime-based freshness; hash/manifest-backed freshness is intentionally separate.
+The manifest is local OSS build provenance for deterministic correctness. It does not include timestamps, random IDs, machine-specific paths, or environment secrets.
+
+`rendershield doctor` uses this file for SHA-256 source/output freshness when present and valid. If the manifest is absent (older builds), Doctor falls back to best-effort mtime freshness. A present but corrupt/invalid manifest fails closed — Doctor does not pretend the file is missing. This is offline local provenance only; `verify --prod` remains the production check.
