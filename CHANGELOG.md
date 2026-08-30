@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Clean `dist/` before TypeScript compile (`npm run build` / `prepack`) so orphaned outputs from another branch cannot leak into `npm pack` or publish.
+
 ### Security
 
 - Remove `gray-matter` and its JavaScript/eval-capable frontmatter engine from the dependency tree and parse path.
