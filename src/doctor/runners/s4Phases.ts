@@ -1,6 +1,10 @@
 import fs from "fs-extra";
 import path from "node:path";
 import { resolveArtifactPathInOutDir } from "../../core/artifactPathSafety.js";
+import {
+  compareStringsCodeUnit,
+  type BuildManifestPageEntry,
+} from "../../core/buildManifest.js";
 import { resolveRouteIndexHtmlInOutDir } from "../../core/routePathSafety.js";
 import { validateOutputPath } from "../../core/outputPathSafety.js";
 import {
@@ -15,6 +19,10 @@ import type { MarkdownDoc, RenderShieldConfig, SchemaType } from "../../types.js
 import type { DoctorCollector } from "../collector.js";
 import type { DoctorPhaseContext } from "../context.js";
 import { asRenderShieldError, joinUrl } from "../helpers.js";
+import {
+  compareManifestPageFreshness,
+  loadBuildManifestForDoctor,
+} from "../manifestFreshness.js";
 
 function canRunOutputPhases(ctx: DoctorPhaseContext): boolean {
   return Boolean(ctx.config && ctx.docs.length > 0);
@@ -203,11 +211,11 @@ export async function runOutputPresencePhase(
   }
 }
 
-export async function runFreshnessPhase(
+async function runMtimeFreshnessFallback(
   ctx: DoctorPhaseContext,
   collector: DoctorCollector
 ): Promise<void> {
-  if (!canRunOutputPhases(ctx) || !ctx.config || !ctx.outDirAbs) return;
+  if (!ctx.outDirAbs) return;
 
   const staleRoutes: string[] = [];
   const currentRoutes: string[] = [];
@@ -228,7 +236,7 @@ export async function runFreshnessPhase(
         "output",
         `${doc.routePath}: source mtime newer than built HTML (best-effort)`,
         {
-          hint: "Run rendershield build to refresh stale pages. Mtime comparison is best-effort, not proof of freshness.",
+          hint: "Run rendershield build to refresh stale pages. Mtime comparison is best-effort, not proof of freshness. Prefer a post-build rendershield-manifest.json for SHA-256 provenance.",
           details: {
             routePath: doc.routePath,
             sourcePath: doc.sourcePath,
@@ -252,13 +260,171 @@ export async function runFreshnessPhase(
       `${currentRoutes.length} built page(s) current by mtime (best-effort)`,
       {
         details: {
-          routes: currentRoutes.sort((a, b) => a.localeCompare(b)),
+          routes: [...currentRoutes].sort(compareStringsCodeUnit),
           staleCount: staleRoutes.length,
           method: "mtime-best-effort",
         },
       }
     );
   }
+}
+
+async function runManifestHashFreshness(
+  ctx: DoctorPhaseContext,
+  collector: DoctorCollector,
+  manifestPath: string,
+  pages: BuildManifestPageEntry[]
+): Promise<void> {
+  if (!ctx.outDirAbs) return;
+
+  const matchingRoutes: string[] = [];
+
+  for (const page of pages) {
+    const result = await compareManifestPageFreshness(
+      ctx.cwd,
+      ctx.outDirAbs,
+      page
+    );
+
+    if (result.status === "match") {
+      matchingRoutes.push(result.route);
+      continue;
+    }
+
+    if (result.status === "source-changed") {
+      collector.warn(
+        "freshness",
+        "DOCTOR_FRESHNESS_SOURCE_CHANGED",
+        "output",
+        `${result.route}: source Markdown SHA-256 differs from build manifest`,
+        {
+          hint: "Source changed since the build that wrote the manifest. Run rendershield build to refresh.",
+          details: {
+            routePath: result.route,
+            sourcePath: result.sourcePath,
+            htmlPath: result.htmlPath,
+            expectedSha256: result.expectedSha256,
+            actualSha256: result.actualSha256,
+            method: "manifest-sha256",
+            concern: "source-provenance",
+            manifestPath,
+          },
+        }
+      );
+      continue;
+    }
+
+    if (result.status === "output-changed") {
+      collector.warn(
+        "freshness",
+        "DOCTOR_FRESHNESS_OUTPUT_CHANGED",
+        "output",
+        `${result.route}: generated HTML SHA-256 differs from build manifest`,
+        {
+          hint: "Generated HTML changed since the build that wrote the manifest. Run rendershield build to refresh, or investigate unexpected output edits.",
+          details: {
+            routePath: result.route,
+            sourcePath: result.sourcePath,
+            htmlPath: result.htmlPath,
+            expectedSha256: result.expectedSha256,
+            actualSha256: result.actualSha256,
+            method: "manifest-sha256",
+            concern: "output-integrity",
+            manifestPath,
+          },
+        }
+      );
+      continue;
+    }
+
+    if (result.status === "source-missing") {
+      collector.fail(
+        "freshness",
+        "DOCTOR_FRESHNESS_SOURCE_MISSING",
+        "output",
+        `${result.route}: source Markdown listed in build manifest is missing`,
+        {
+          hint: "Restore the source file or rebuild after fixing content inventory.",
+          details: {
+            routePath: result.route,
+            sourcePath: result.sourcePath,
+            htmlPath: result.htmlPath,
+            method: "manifest-sha256",
+            concern: "source-provenance",
+            manifestPath,
+          },
+        }
+      );
+      continue;
+    }
+
+    collector.fail(
+      "freshness",
+      "DOCTOR_FRESHNESS_OUTPUT_MISSING",
+      "output",
+      `${result.route}: generated HTML listed in build manifest is missing`,
+      {
+        hint: "Run rendershield build to regenerate missing pages.",
+        details: {
+          routePath: result.route,
+          sourcePath: result.sourcePath,
+          htmlPath: result.htmlPath,
+          method: "manifest-sha256",
+          concern: "output-integrity",
+          manifestPath,
+        },
+      }
+    );
+  }
+
+  if (matchingRoutes.length > 0) {
+    collector.pass(
+      "freshness",
+      "DOCTOR_FRESHNESS_CURRENT",
+      "output",
+      `${matchingRoutes.length} page(s) match build manifest SHA-256 provenance`,
+      {
+        details: {
+          routes: matchingRoutes,
+          method: "manifest-sha256",
+          concern: "manifest-provenance",
+          manifestPath,
+        },
+      }
+    );
+  }
+}
+
+export async function runFreshnessPhase(
+  ctx: DoctorPhaseContext,
+  collector: DoctorCollector
+): Promise<void> {
+  if (!canRunOutputPhases(ctx) || !ctx.config || !ctx.outDirAbs) return;
+
+  const loaded = await loadBuildManifestForDoctor(ctx.cwd, ctx.outDirAbs);
+
+  if (loaded.status === "absent") {
+    await runMtimeFreshnessFallback(ctx, collector);
+    return;
+  }
+
+  if (loaded.status === "invalid") {
+    collector.fail("freshness", loaded.code, "output", loaded.message, {
+      hint: "Fix or remove the unusable rendershield-manifest.json, then run rendershield build. Doctor does not fall back to mtime when a manifest is present but invalid.",
+      details: {
+        ...loaded.details,
+        path: loaded.path,
+      },
+    });
+    return;
+  }
+
+  await runManifestHashFreshness(
+    ctx,
+    collector,
+    loaded.path,
+    loaded.manifest.pages
+  );
 }
 
 export async function runContractPhase(

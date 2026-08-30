@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Doctor freshness uses `rendershield-manifest.json` SHA-256 provenance when a valid build manifest exists under `output.outDir` (source/output match, change, or missing). Absent manifests keep legacy best-effort mtime freshness; present but unusable manifests fail closed without mtime fallback.
+
 ### Fixed
 
 - Clean `dist/` before TypeScript compile (`npm run build` / `prepack`) so orphaned outputs from another branch cannot leak into `npm pack` or publish.
