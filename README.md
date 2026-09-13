@@ -13,6 +13,8 @@ No frameworks required.
 No browser rendering.
 No guessing what bots see.
 
+> **Architecture note:** RenderShield Prerender does not execute your SPA or capture a browser-rendered DOM. It generates deterministic static HTML from structured content ahead of request time. Puppeteer, Playwright, Chromium, and runtime browser rendering are not part of its architecture.
+
 If a page builds, the HTML contract is satisfied.
 If `verify --prod` passes for a URL, that URL is receiving prerendered HTML to bots in production.
 
