@@ -7,13 +7,18 @@ export type ValidateParams = {
   /** Source markdown file path; included in error context when provided */
   sourcePath?: string;
   /**
-   * Allowed JSON-LD @type values. Default allows Article, BlogPosting, WebPage.
+   * Allowed JSON-LD @type values. Default allows Article, BlogPosting, WebPage, HowTo.
    * Add types (e.g. FAQPage, Organization) if your renderer emits them.
    */
   allowedJsonLdTypes?: string[];
 };
 
-const DEFAULT_ALLOWED_JSON_LD_TYPES = ["Article", "BlogPosting", "WebPage"];
+const DEFAULT_ALLOWED_JSON_LD_TYPES = [
+  "Article",
+  "BlogPosting",
+  "WebPage",
+  "HowTo",
+];
 
 function hasNonEmptyTitle(html: string): boolean {
   const m = html.match(/<title>([\s\S]*?)<\/title>/i);
@@ -83,8 +88,77 @@ function normalizeJsonLdTypes(typeValue: unknown): string[] {
   return [];
 }
 
-/** Minimal shape for a JSON-LD node we validate (schema.org Article, BlogPosting, WebPage, etc.). */
+/** Minimal shape for a JSON-LD node we validate (schema.org Article, BlogPosting, WebPage, HowTo, etc.). */
 type JsonLdNode = Record<string, unknown>;
+
+type JsonLdStepNode = Record<string, unknown>;
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+/** Collect candidate JSON-LD nodes from root objects and any embedded @graph arrays. */
+function collectJsonLdNodes(parsed: unknown): JsonLdNode[] {
+  const roots = Array.isArray(parsed) ? parsed : [parsed];
+  const out: JsonLdNode[] = [];
+  for (const root of roots) {
+    const rootObj = asObject(root);
+    if (!rootObj) continue;
+    out.push(rootObj as JsonLdNode);
+
+    const graph = rootObj["@graph"];
+    if (!Array.isArray(graph)) continue;
+    for (const node of graph) {
+      const graphObj = asObject(node);
+      if (!graphObj) continue;
+      if (!graphObj["@context"] && rootObj["@context"]) {
+        out.push({
+          "@context": rootObj["@context"],
+          ...graphObj,
+        } as JsonLdNode);
+        continue;
+      }
+      out.push(graphObj as JsonLdNode);
+    }
+  }
+  return out;
+}
+
+function validateHowToNode(node: JsonLdNode, location: string): void {
+  const stepValue = node.step;
+  const steps = Array.isArray(stepValue) ? stepValue : stepValue == null ? [] : [stepValue];
+  if (steps.length === 0) {
+    throw new Error(
+      `Invalid JSON-LD at ${location}: HowTo requires step entries (expected one or more HowToStep nodes).`
+    );
+  }
+
+  let hasHowToStep = false;
+  for (let i = 0; i < steps.length; i++) {
+    const stepObj = asObject(steps[i]) as JsonLdStepNode | null;
+    if (!stepObj) continue;
+
+    const stepTypes = normalizeJsonLdTypes(stepObj["@type"]);
+    if (stepTypes.length > 0 && !stepTypes.includes("howtostep")) {
+      throw new Error(
+        `Invalid JSON-LD at ${location}: HowTo step ${i + 1} has unsupported @type "${String(stepObj["@type"])}". Expected HowToStep.`
+      );
+    }
+    if (stepTypes.includes("howtostep")) hasHowToStep = true;
+    if (!stepObj.name && !stepObj.text) {
+      throw new Error(
+        `Invalid JSON-LD at ${location}: HowToStep ${i + 1} must include name or text.`
+      );
+    }
+  }
+
+  if (!hasHowToStep) {
+    throw new Error(
+      `Invalid JSON-LD at ${location}: HowTo step entries must include at least one @type "HowToStep" object.`
+    );
+  }
+}
 
 /** Validate a single JSON-LD node (object). Returns true if it satisfies the contract. */
 function validateJsonLdNode(
@@ -123,6 +197,10 @@ function validateJsonLdNode(
     );
   }
 
+  if (types.includes("howto")) {
+    validateHowToNode(node, location);
+  }
+
   if (node.datePublished && typeof node.datePublished === "string") {
     const dateMatch = node.datePublished.match(/^\d{4}-\d{2}-\d{2}/);
     if (!dateMatch) {
@@ -156,7 +234,7 @@ function validateJsonLdSchema(
     );
   }
 
-  const items: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
+  const items = collectJsonLdNodes(parsed);
   if (items.length === 0) {
     throw new Error(
       `Invalid JSON-LD at ${location}: empty array or missing object.`
@@ -165,10 +243,8 @@ function validateJsonLdSchema(
 
   let lastErr: Error | null = null;
   for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    if (typeof item !== "object" || item === null || Array.isArray(item)) continue;
     try {
-      validateJsonLdNode(item as JsonLdNode, location, allowedTypes);
+      validateJsonLdNode(items[i], location, allowedTypes);
       return;
     } catch (e) {
       lastErr = e instanceof Error ? e : new Error(String(e));

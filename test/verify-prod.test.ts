@@ -12,6 +12,16 @@ const validBotHtml = `<!DOCTYPE html><html><head><title>Test</title>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Test","datePublished":"2024-01-15"}</script>
 </head><body><article><p>This is enough article content to pass the word and character count requirements for the contract check.</p></article></body></html>`;
 
+const validHowToBotHtml = `<!DOCTYPE html><html><head><title>Quickstart</title>
+<meta name="description" content="Desc">
+<link rel="canonical" href="https://example.com/docs/quickstart">
+<meta property="og:title" content="Quickstart">
+<meta property="og:description" content="Desc">
+<meta property="og:image" content="https://example.com/img.jpg">
+<meta property="og:url" content="https://example.com/docs/quickstart">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"HowTo","name":"RenderShield Quickstart","description":"Install and verify.","step":[{"@type":"HowToStep","name":"Install","text":"npm i -D @lownoise-studio/rendershield"},{"@type":"HowToStep","name":"Verify","text":"npx rendershield verify --prod https://example.com/docs/quickstart"}]}</script>
+</head><body><article><p>This quickstart guide contains enough article-like prose to satisfy the contract while validating HowTo JSON-LD for production verification tests.</p></article></body></html>`;
+
 const spaShellHtml = `<!DOCTYPE html><html><head><title>App</title></head><body><div id="root"></div></body></html>`;
 
 function mockFetch(handlers: {
@@ -59,6 +69,27 @@ describe("cmdVerify --prod", () => {
     expect(result.mode).toBe("prod");
     if (result.mode === "prod") {
       expect(result.pages[0].url).toBe("https://example.com/blog/post");
+      expect(result.pages[0].contract.ok).toBe(true);
+    }
+  });
+
+  it("passes --prod when bot JSON-LD uses HowTo", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockFetch({
+        bot: { headers: { "x-rendershield": "bot-hit" }, body: validHowToBotHtml },
+        human: { body: spaShellHtml },
+      })
+    );
+
+    const result = await cmdVerify(process.cwd(), {
+      prod: true,
+      prodUrl: "https://example.com/docs/quickstart",
+    });
+
+    expect(result.mode).toBe("prod");
+    if (result.mode === "prod") {
+      expect(result.pages[0].url).toBe("https://example.com/docs/quickstart");
       expect(result.pages[0].contract.ok).toBe(true);
     }
   });
