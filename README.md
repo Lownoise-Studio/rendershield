@@ -46,7 +46,7 @@ RenderShield Prerender enforces two guarantees:
   - canonical link
   - Open Graph tags
   - Twitter tags
-  - JSON-LD (Article, BlogPosting, WebPage)
+  - JSON-LD (generated types: Article, BlogPosting, WebPage)
 - Generates:
   - index.html per route
   - sitemap.xml
@@ -56,7 +56,7 @@ RenderShield Prerender enforces two guarantees:
   - missing title, metadata, or article body causes the build to fail
 - Verifies behavior:
   - `verify` (local) — prints curl smoke-test commands for built output; fails if output is missing (does not fetch URLs or validate HTML)
-  - `verify --prod <url>` — fetches production as Googlebot, asserts `x-rendershield: bot-hit`, and validates the HTML contract; fails if the Worker is missing or falling back
+  - `verify --prod <url>` — fetches production as Googlebot, asserts `x-rendershield: bot-hit`, and validates the HTML contract (default JSON-LD allowlist: Article, BlogPosting, WebPage, HowTo); fails if the Worker is missing or falling back
 
 ---
 

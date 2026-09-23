@@ -80,6 +80,56 @@ describe("checkPrerenderContract", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("passes when JSON-LD is HowTo with HowToStep entries", () => {
+    const jsonLd = `<script type="application/ld+json">${JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "HowTo",
+      name: "RenderShield Quickstart",
+      description: "Install and verify RenderShield.",
+      step: [
+        { "@type": "HowToStep", name: "Install", text: "npm i -D @lownoise-studio/rendershield" },
+        { "@type": "HowToStep", name: "Init", text: "npx rendershield init" },
+        { "@type": "HowToStep", name: "Build", text: "npx rendershield build" },
+        { "@type": "HowToStep", name: "Verify", text: "npx rendershield verify --prod https://example.com/docs/quickstart" },
+      ],
+    })}</script>`;
+    const html = baseHtml(jsonLd);
+    const result = checkPrerenderContract(html);
+    expect(result.ok).toBe(true);
+  });
+
+  it("passes when HowTo appears inside @graph", () => {
+    const jsonLd = `<script type="application/ld+json">${JSON.stringify({
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "HowTo",
+          name: "RenderShield Quickstart",
+          description: "Install and verify RenderShield.",
+          step: [
+            { "@type": "HowToStep", name: "Install", text: "npm i -D @lownoise-studio/rendershield" },
+          ],
+        },
+      ],
+    })}</script>`;
+    const html = baseHtml(jsonLd);
+    const result = checkPrerenderContract(html);
+    expect(result.ok).toBe(true);
+  });
+
+  it("fails when HowTo has no HowToStep entries", () => {
+    const jsonLd = `<script type="application/ld+json">${JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "HowTo",
+      name: "RenderShield Quickstart",
+      step: [{ name: "Install", text: "npm i -D @lownoise-studio/rendershield" }],
+    })}</script>`;
+    const html = baseHtml(jsonLd);
+    const result = checkPrerenderContract(html);
+    expect(result.ok).toBe(false);
+    expect(result.missing.some((m) => m.includes("type contract"))).toBe(true);
+  });
+
   it("fails when article is missing", () => {
     const jsonLd = `<script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Test","datePublished":"2024-01-15"}</script>`;
     const html = baseHtml(jsonLd).replace(/<article>[\s\S]*?<\/article>/i, "");

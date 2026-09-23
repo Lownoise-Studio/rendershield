@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Clean `dist/` before TypeScript compile (`npm run build` / `prepack`) so orphaned outputs from another branch cannot leak into `npm pack` or publish.
+- `verify` / `verify --prod` default JSON-LD contract now accepts `HowTo` (in addition to `Article`, `BlogPosting`, `WebPage`) and validates that `HowTo` includes `HowToStep` step entries, matching Quickstart-style production docs without broadly weakening type checks.
 
 ### Security
 
