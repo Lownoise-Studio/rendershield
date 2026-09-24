@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.4] - 2026-09-24
+
 ### Added
 
 - Doctor freshness uses `rendershield-manifest.json` SHA-256 provenance when a valid build manifest exists under `output.outDir` (source/output match, change, or missing). Absent manifests keep legacy best-effort mtime freshness; present but unusable manifests fail closed without mtime fallback. Freshness runs even when the current Markdown inventory is empty. Manifest paths use realpath/symlink containment; unreadable files become structured FAIL diagnostics rather than engine throws.

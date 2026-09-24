@@ -1,6 +1,6 @@
 {
   "name": "@lownoise-studio/rendershield",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "RenderShield Prerender: deterministic bot-aware prerendering with verifiable crawler delivery.",
   "type": "module",
   "license": "MIT",
