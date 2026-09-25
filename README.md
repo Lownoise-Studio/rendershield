@@ -328,6 +328,15 @@ Boring on purpose.
 
 ---
 
+## Related: RenderShield React
+
+This package (`@lownoise-studio/rendershield`) is separate from the React render-boundary library: React focuses on observable/controllable React render boundaries (HOC gate + hook stabilizer + diagnostics), while Prerender enforces a bot-facing HTML contract.
+
+- GitHub: https://github.com/Lownoise-Studio/rendershield-react
+- npm: https://www.npmjs.com/package/@lownoise-studio/render-shield-react
+
+---
+
 ## License
 
 MIT

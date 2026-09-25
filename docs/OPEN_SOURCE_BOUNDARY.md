@@ -25,7 +25,7 @@ Any future commercial or service layer — if built — begins where RenderShiel
 
 These layers are distinct. Coupling them in packaging, licensing, or required network calls for normal local builds would violate this policy.
 
-**RenderShield React** is a separate product boundary. Prerender must not depend on or import React / JSX / TSX tooling, and must not require React config to function. See also [DOCTOR_SPEC.md](./DOCTOR_SPEC.md) non-goals.
+**RenderShield React** is a separate product boundary. Prerender must not depend on or import React / JSX / TSX tooling, and must not require React config to function. See also [DOCTOR_SPEC.md](./DOCTOR_SPEC.md) non-goals. Related project links: [GitHub](https://github.com/Lownoise-Studio/rendershield-react) · [npm `@lownoise-studio/render-shield-react`](https://www.npmjs.com/package/@lownoise-studio/render-shield-react).
 
 ---
 
