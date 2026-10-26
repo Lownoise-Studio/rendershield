@@ -67,7 +67,7 @@
     "fs-extra": "^11.2.0",
     "js-yaml": "^4.3.2",
     "markdown-it": "^14.2.0",
-    "parse5": "^8.0.1"
+    "parse5": "^7.3.0"
   },
   "overrides": {
     "picomatch": "2.3.2"
