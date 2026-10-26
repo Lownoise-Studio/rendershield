@@ -1,3 +1,4 @@
+import { assertSearchControls, type SearchControlExpectations } from "../core/searchControls.js";
 import fs from "fs-extra";
 import path from "node:path";
 import { loadConfig } from "../core/loadConfig.js";
@@ -53,7 +54,7 @@ export type VerifyPageResult = {
   contract?: ContractCheckResult;
 };
 
-export type VerifyOptions = CommandOptions & {
+export type VerifyOptions = CommandOptions & SearchControlExpectations & {
   /** Set when --prod is passed (URL may be omitted with --all). */
   prod?: boolean;
   prodUrl?: string;
@@ -81,6 +82,10 @@ export async function cmdVerify(
   cwd = process.cwd(),
   options: VerifyOptions = {}
 ): Promise<VerifyResult> {
+  if (!(options.prod || options.prodUrl) &&
+      (options.expectRobots !== undefined || options.expectXRobotsTag !== undefined || options.expectNoSnippet)) {
+    throw renderShieldError("CLI_INVALID_ARGS", "Search-control expectations require --prod");
+  }
   if (options.prod || options.prodUrl) {
     return runVerifyProdMode(cwd, options);
   }
@@ -116,7 +121,7 @@ async function runVerifyProdMode(
         { outDir: cfg.output.outDir }
       );
     }
-    return runVerifyProdAll(cfg, cwd, outDirAbs, indexFiles);
+    return runVerifyProdAll(cfg, cwd, outDirAbs, indexFiles, options);
   }
 
   if (!options.prodUrl) {
@@ -127,7 +132,7 @@ async function runVerifyProdMode(
   }
 
   const single = await fetchAndVerifyProd(
-    options.prodUrl.startsWith("http") ? options.prodUrl : `https://${options.prodUrl}`
+    options.prodUrl.startsWith("http") ? options.prodUrl : `https://${options.prodUrl}`, options
   );
   return { mode: "prod", ok: true, pages: [single] };
 }
@@ -326,7 +331,8 @@ async function runVerifyProdAll(
   cfg: Awaited<ReturnType<typeof loadConfig>>,
   _cwd: string,
   outDirAbs: string,
-  indexFiles: string[]
+  indexFiles: string[],
+  expectations: SearchControlExpectations
 ): Promise<VerifyProdResult> {
   const pages: VerifyProdResult["pages"] = [];
   const failures: string[] = [];
@@ -335,7 +341,7 @@ async function runVerifyProdAll(
     const routePath = indexHtmlPathToRoute(outDirAbs, indexPath);
     const prodUrl = joinUrl(cfg.site.canonicalBase, routePath);
     try {
-      const result = await fetchAndVerifyProd(prodUrl);
+      const result = await fetchAndVerifyProd(prodUrl, expectations);
       pages.push(result);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -360,7 +366,8 @@ Checked ${pages.length} URL(s) from build output.
 }
 
 async function fetchAndVerifyProd(
-  normalizedUrl: string
+  normalizedUrl: string,
+  expectations: SearchControlExpectations = {}
 ): Promise<{ url: string; contract: ContractCheckResult }> {
   let botHtml: string;
   let humanHtml: string;
@@ -384,6 +391,7 @@ async function fetchAndVerifyProd(
     humanStatus = humanRes.status;
     xRenderShield = botRes.headers.get("x-rendershield");
     botHtml = await botRes.text();
+    assertSearchControls(botHtml, botRes.headers, expectations);
     humanHtml = await humanRes.text();
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

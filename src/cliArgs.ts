@@ -50,6 +50,17 @@ export function parseVerifyArgs(
       }
       continue;
     }
+    if (arg === "--expect-robots" || arg === "--expect-x-robots-tag") {
+      const value = argv[++i]?.trim();
+      if (!value || value.startsWith("--")) throw renderShieldError("CLI_INVALID_ARGS", `${arg} requires a value`);
+      if (arg === "--expect-robots") options.expectRobots = value;
+      else options.expectXRobotsTag = value;
+      continue;
+    }
+    if (arg === "--expect-nosnippet") {
+      options.expectNoSnippet = true;
+      continue;
+    }
     if (arg === "--check") {
       options.check = true;
       continue;

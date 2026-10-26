@@ -51,6 +51,8 @@ export type RenderShieldConfig = {
     datePublished: string; // YYYY-MM-DD
     coverImage: string; // /images/...
     slug: string;
+    robots?: string;
+    noSnippet?: boolean; // Exclude the generated article from search snippets.
     htmlContent: string; // rendered <p>...
   };
   

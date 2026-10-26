@@ -68,6 +68,7 @@ export function renderPageHtml(cfg: RenderShieldConfig, doc: MarkdownDoc): strin
 
   <title>${escapeHtml(title)}</title>
   <meta name="description" content="${escapeHtml(description)}">
+  ${doc.robots ? `<meta name="robots" content="${escapeHtml(doc.robots)}">` : ""}
   <link rel="canonical" href="${escapeHtml(canonicalUrl)}">
 
   <meta property="og:type" content="${ogType}">
@@ -90,11 +91,13 @@ export function renderPageHtml(cfg: RenderShieldConfig, doc: MarkdownDoc): strin
 <body>
   <main>
     <article>
+      ${doc.noSnippet ? "<section data-nosnippet>" : ""}
       <header>
         <h1>${escapeHtml(doc.title)}</h1>
         <p><time datetime="${escapeHtml(doc.datePublished)}">${escapeHtml(doc.datePublished)}</time></p>
       </header>
       ${doc.htmlContent}
+      ${doc.noSnippet ? "</section>" : ""}
     </article>
   </main>
 </body>

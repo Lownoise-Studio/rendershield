@@ -36,6 +36,9 @@ Verify:
   verify --all --check   Validate contract for every built page
   verify --prod <url> Fetch URL as bot; require x-rendershield: bot-hit + contract
   verify --prod --all Check every route from build output in production
+  --expect-robots <directives>       Assert robots meta directives (production)
+  --expect-x-robots-tag <directives> Assert response header directives (production)
+  --expect-nosnippet                 Require a data-nosnippet element (production)
 
 Notes:
   - Content: content/<collection>/**/*.md (frontmatter required)
