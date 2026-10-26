@@ -134,3 +134,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.0] - 2025-02-18
 
 - Initial npm release with init, build, verify, optional Cloudflare Worker, and HTML contract validation.
+
+## Unreleased
+
+- Add optional robots and noSnippet Markdown frontmatter without enabling raw HTML.
+- Add explicit production expectations for robots meta, X-Robots-Tag and data-nosnippet.
+- Document prerender-origin header configuration and verification limits.

@@ -149,3 +149,15 @@ describe("cmdVerify --prod", () => {
     });
   });
 });
+
+describe("production search-control expectations", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("checks fetched bot controls and rejects mismatches", async () => {
+    vi.stubGlobal("fetch", mockFetch({bot: {headers: {'x-rendershield':'bot-hit','x-robots-tag':'noindex'}, body: validBotHtml.replace('</head>', '<meta name="robots" content="nosnippet"></head>').replace('<article>', '<article><section data-nosnippet>').replace('</article>', '</section></article>')}}));
+    await expect(cmdVerify(process.cwd(), {prod:true,prodUrl:'https://example.com/blog/test',expectRobots:'nosnippet',expectXRobotsTag:'noindex',expectNoSnippet:true})).resolves.toMatchObject({ok:true});
+    await expect(cmdVerify(process.cwd(), {prod:true,prodUrl:'https://example.com/blog/test',expectRobots:'index'})).rejects.toThrow('Search controls');
+  });
+  it("rejects expectations in offline mode", async () => {
+    await expect(cmdVerify(process.cwd(), {check:true,expectRobots:'noindex'})).rejects.toThrow('require --prod');
+  });
+});

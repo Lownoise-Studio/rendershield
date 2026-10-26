@@ -74,3 +74,39 @@ rendershield verify --all --check        # contract-check every built page
 rendershield verify --prod --all         # prod-check every route from build output
 rendershield verify --prod https://example.com/blog/post
 ```
+
+### Page-level search controls
+
+Optional Markdown frontmatter:
+
+```yaml
+robots: "noindex, nosnippet"
+noSnippet: true
+```
+
+`robots` must be a non-empty string and emits an escaped `name="robots"` meta tag.
+`noSnippet` must be a boolean; `true` wraps the article content in a
+`section data-nosnippet`. It affects the article as a whole, not selected passages.
+Raw HTML remains disabled in Markdown. Defaults emit neither control.
+These fields describe the generated page; RenderShield does not copy controls
+from an existing SPA. These are search directives, not access controls.
+
+Production checks can assert expected controls explicitly:
+
+```bash
+rendershield verify --prod https://example.com/blog/test-page --expect-robots "noindex, nosnippet" --expect-nosnippet
+rendershield verify --prod https://example.com/blog/test-page --expect-x-robots-tag "noindex"
+```
+
+Expectations require production mode. With `--all`, the same expectations apply
+to every checked route; use individual commands when pages have different policies.
+Meta and header checks compare comma-separated directives ignoring order and case;
+extra directives cause a mismatch. The snippet check asserts the presence of a
+`data-nosnippet` div, span, or section, not its coverage or search-engine enforcement.
+Crawler-specific meta tags are outside these checks.
+
+Configure `X-Robots-Tag` on the host serving the prerendered `/index.html` resource.
+The generated Worker retains headers from that response; it does not merge headers
+from the SPA route. No header is synthesized by the generator. A passing default
+HTML contract check does not validate these controls unless expectations are supplied.
+Blocking crawling can stop a crawler from seeing HTML or header directives.

@@ -100,6 +100,14 @@ export function parseMarkdownFromRaw(
     buildRoutePath(routeBase, slug),
     `routePath for ${absPath}`
   );
+  const robots = parsed.data.robots;
+  if (robots !== undefined && (typeof robots !== "string" || !robots.trim())) {
+    throw renderShieldError("CONTENT_INVALID", `robots in ${absPath} must be a non-empty string`);
+  }
+  const noSnippet = parsed.data.noSnippet;
+  if (noSnippet !== undefined && typeof noSnippet !== "boolean") {
+    throw renderShieldError("CONTENT_INVALID", `noSnippet in ${absPath} must be a boolean`);
+  }
   const htmlContent = md.render(parsed.content);
 
   return {
@@ -111,6 +119,8 @@ export function parseMarkdownFromRaw(
     datePublished,
     coverImage,
     slug,
+    robots: typeof robots === "string" ? robots.trim() : undefined,
+    noSnippet,
     htmlContent,
   };
 }
