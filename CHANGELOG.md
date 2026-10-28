@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-10-26
+
+- Add optional robots and noSnippet Markdown frontmatter without enabling raw HTML.
+- Add explicit production expectations for robots meta, X-Robots-Tag and data-nosnippet.
+- Document prerender-origin header configuration and verification limits.
+
 ## [Unreleased]
 
 ## [1.2.4] - 2026-09-24
@@ -134,9 +140,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.0] - 2025-02-18
 
 - Initial npm release with init, build, verify, optional Cloudflare Worker, and HTML contract validation.
-
-## Unreleased
-
-- Add optional robots and noSnippet Markdown frontmatter without enabling raw HTML.
-- Add explicit production expectations for robots meta, X-Robots-Tag and data-nosnippet.
-- Document prerender-origin header configuration and verification limits.

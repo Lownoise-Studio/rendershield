@@ -55,14 +55,20 @@ function lockVersion(pkg: string): string {
 }
 
 describe("package identity (packaging compatibility)", () => {
-  it("preserves npm package name, CLI bin, and version", () => {
+  it("preserves package identity and keeps release versions consistent", () => {
     const pkg = fs.readJsonSync(path.join(__dirname, "..", "package.json")) as {
       name: string;
       version: string;
       bin: Record<string, string>;
     };
     expect(pkg.name).toBe("@lownoise-studio/rendershield");
-    expect(pkg.version).toBe("1.2.4");
+    const lock = fs.readJsonSync(LOCKFILE) as {
+      version: string;
+      packages: Record<string, { version?: string }>;
+    };
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(lock.version).toBe(pkg.version);
+    expect(lock.packages[""].version).toBe(pkg.version);
     expect(pkg.bin.rendershield).toBe("dist/cli.js");
   });
 });
